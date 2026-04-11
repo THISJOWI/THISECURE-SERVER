@@ -72,13 +72,6 @@ commands:
 
 jobs:
 
-  build-auth:
-    executor: docker-executor
-    steps:
-      - docker-build-push:
-          service: auth
-          image: thsjowi/auth
-
   build-config:
     executor: docker-executor
     steps:
@@ -124,10 +117,6 @@ jobs:
           command: |
             git clone https://${GITHUB_TOKEN}@github.com/THISJOWI/THISJOWI-Infrastructure.git k8s-repo
       - update-k8s-manifest:
-          service: auth
-          manifest_path: manifests/application/auth/deploy.yaml
-          image: thsjowi/auth
-      - update-k8s-manifest:
           service: config
           manifest_path: manifests/application/config/deploy.yaml
           image: thsjowi/config
@@ -161,10 +150,6 @@ jobs:
 workflows:
   ci-cd:
     jobs:
-      - build-auth:
-          filters:
-            branches:
-              only: master
       - build-config:
           filters:
             branches:
@@ -187,7 +172,6 @@ workflows:
               only: master
       - deploy-argocd:
           requires:
-            - build-auth
             - build-config
             - build-notes
             - build-otp
