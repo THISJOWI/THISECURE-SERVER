@@ -71,14 +71,6 @@ commands:
             echo "Tag actualizado: << parameters.image >>:${CIRCLE_SHA1}"
 
 jobs:
-
-  build-config:
-    executor: docker-executor
-    steps:
-      - docker-build-push:
-          service: config
-          image: thsjowi/config
-
   build-notes:
     executor: docker-executor
     steps:
@@ -117,10 +109,6 @@ jobs:
           command: |
             git clone https://${GITHUB_TOKEN}@github.com/THISJOWI/THISJOWI-Infrastructure.git k8s-repo
       - update-k8s-manifest:
-          service: config
-          manifest_path: manifests/application/config/deploy.yaml
-          image: thsjowi/config
-      - update-k8s-manifest:
           service: note
           manifest_path: manifests/application/notes/deploy.yaml
           image: thsjowi/note
@@ -150,10 +138,6 @@ jobs:
 workflows:
   ci-cd:
     jobs:
-      - build-config:
-          filters:
-            branches:
-              only: master
       - build-notes:
           filters:
             branches:
@@ -172,7 +156,6 @@ workflows:
               only: master
       - deploy-argocd:
           requires:
-            - build-config
             - build-notes
             - build-otp
             - build-password
