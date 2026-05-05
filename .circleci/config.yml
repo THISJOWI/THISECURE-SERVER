@@ -4,7 +4,7 @@ executors:
   docker-executor:
     docker:
       - image: cimg/base:stable
-    resource_class: medium
+    resource_class: xlarge
 
 commands:
 
@@ -19,12 +19,17 @@ commands:
       - setup_remote_docker:
           docker_layer_caching: true
       - run:
+          name: "Instalar Docker Buildx"
+          command: |
+            docker buildx version || install-docker-buildx
+            docker buildx create --name mybuilder --driver docker-container --use || true
+            docker buildx inspect mybuilder --bootstrap
+      - run:
           name: "Detectar cambios y hacer Build & Push << parameters.service >>"
           command: |
             BASE=$(git rev-parse --verify HEAD~1 2>/dev/null || echo "4b825dc642cb6eb9a060e54bf8d69288fbee4904")
             CHANGED=$(git diff --name-only "$BASE" HEAD | grep "^<< parameters.service >>/" || true)
 
-            # Crear siempre el archivo, con true o false
             mkdir -p /tmp/built
             if [ -z "$CHANGED" ]; then
               echo "Sin cambios en << parameters.service >>, saltando build."
@@ -38,12 +43,13 @@ commands:
             IMAGE_TAG="<< parameters.image >>:${CIRCLE_SHA1}"
             IMAGE_LATEST="<< parameters.image >>:latest"
             echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-            docker build \
+
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
               -t "$IMAGE_TAG" \
               -t "$IMAGE_LATEST" \
+              --push \
               ./<< parameters.service >>
-            docker push "$IMAGE_TAG"
-            docker push "$IMAGE_LATEST"
       - persist_to_workspace:
           root: /tmp/built
           paths:
