@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: dynamic-infrastructure-discovery
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/THISJOWI/THISJOWI-Server.git
+        revision: master
+        directories:
+          # Escanea todas las subcarpetas en estas tres rutas
+          - path: infrastructure/k8s/application/*
+          - path: infrastructure/k8s/databases/*
+          - path: infrastructure/k8s/utils/*
+  template:
+    metadata:
+      # El nombre de la app será el nombre de la subcarpeta (ej: password, keydb)
+      name: "{{path.basename}}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/THISJOWI/THISJOWI-Server.git
+        targetRevision: master
+        path: "{{path}}"
+      destination:
+        server: https://kubernetes.default.svc
+        # Se desplegará en el namespace 'thisjowi'
+        namespace: thisjowi
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          # Crea el namespace 'thisjowi' si no existe
+          - CreateNamespace=true
+          # Ayuda a sincronizar recursos aunque haya errores menores
+          - ApplyOutOfSyncOnly=true

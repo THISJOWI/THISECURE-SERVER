@@ -1,0 +1,16 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: cockroach-db-global
+  namespace: thisjowi
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`db.thisjowi.uk`) # <--- Esta es la forma correcta para subdominios
+      kind: Rule
+      services:
+        - name: cockroachdb
+          port: http
+          scheme: https
+          serversTransport: cockroach-transport

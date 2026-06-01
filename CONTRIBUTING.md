@@ -342,7 +342,7 @@ BREAKING CHANGE: The auth response now returns user object nested under 'data' k
 # Detailed commit
 git commit -m "feat(notes): add note sharing functionality
 
-- Add share endpoint POST /v1/notes/{id}/share
+- Add share endpoint POST /api/v1/notes/{id}/share
 - Implement permission checks
 - Add unit and integration tests
 - Update API documentation

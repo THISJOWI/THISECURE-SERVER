@@ -1,0 +1,16 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: cockroachdb-dashboard
+  namespace: thisjowi
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`db.thisjowi.uk`)
+      kind: Rule
+      services:
+        - name: cockroachdb # Nombre del servicio verificado en el paso 1
+          port: 8080 # Puerto verificado en el paso 1
+          # Si el dashboard de cockroachdb usa TLS interno, descomenta la siguiente línea:
+          # scheme: https

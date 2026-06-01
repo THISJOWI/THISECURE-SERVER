@@ -1,0 +1,36 @@
+# LDAP Configuration Example for application.yml or bootstrap.yml
+
+# Spring LDAP Configuration (Global defaults, can be overridden per organization)
+spring:
+  ldap:
+    # These are optional and can be used as fallback
+    # urls: ldap://localhost:389
+    # base: dc=example,dc=com
+    # username: cn=admin,dc=example,dc=com
+    # password: admin_password
+
+# Custom LDAP settings
+ldap:
+  # Connection timeout in milliseconds
+  timeout: 5000
+  # Number of connections in the pool
+  pool-size: 8
+  # Read timeout
+  read-timeout: 5000
+
+# Example organizations (create via API or database)
+# These are examples of how organizations would be configured
+organizations:
+  - domain: "example.com"
+    name: "Example Corporation"
+    ldap-url: "ldap://ldap.example.com:389"
+    ldap-base-dn: "dc=example,dc=com"
+    ldap-bind-dn: "cn=admin,dc=example,dc=com"
+    ldap-bind-password: "${LDAP_ADMIN_PASSWORD}"
+    
+  - domain: "company.org"
+    name: "Company Organization"
+    ldap-url: "ldaps://ldap.company.org:636"
+    ldap-base-dn: "ou=users,dc=company,dc=org"
+    ldap-bind-dn: "cn=service,ou=special,dc=company,dc=org"
+    ldap-bind-password: "${LDAP_SERVICE_PASSWORD}"

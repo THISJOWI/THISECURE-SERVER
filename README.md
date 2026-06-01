@@ -27,7 +27,7 @@ THISJOWI Server is a scalable, microservice-oriented backend designed to power t
 | 🔐 **Auth** | Spring Boot | Identity management, JWT, OAuth2, and multi-tenant LDAP support. |
 | 📝 **Note** | Spring Boot | Encrypted note management with tagging and versioning. |
 | 💬 **Messages** | NestJS | Real-time messaging hub with WebSocket support. |
-| 🔑 **Password** | Spring Boot | Secure credential storage for password management. |
+| 🔑 **Password** | Spring Boot | Secure credential vault for password management. |
 | 🔔 **OTP** | Spring Boot | One-Time Password generation and verification engine. |
 | ⚙️ **Config** | Spring Boot | Centralized configuration management for all services. |
 

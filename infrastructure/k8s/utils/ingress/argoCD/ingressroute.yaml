@@ -1,0 +1,15 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: argocd-server
+  namespace: argocd
+spec:
+  entryPoints:
+    - web        # <-- cambiado de websecure a web
+  routes:
+    - kind: Rule
+      match: Host(`cd.thisjowi.uk`)
+      services:
+        - name: argocd-server
+          port: 80
+  # sin bloque tls:
