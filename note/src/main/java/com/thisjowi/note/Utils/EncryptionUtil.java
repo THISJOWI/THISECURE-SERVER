@@ -3,6 +3,7 @@ package com.thisjowi.note.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
@@ -16,6 +17,7 @@ import java.util.Base64;
 
 
 @Component
+@RefreshScope
 public class EncryptionUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(EncryptionUtil.class);

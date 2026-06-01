@@ -2,12 +2,12 @@ package com.thisjowi.otp.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.thisjowi.otp.dto.OtpCreatedEvent;
 import com.thisjowi.otp.entity.otp;
 import com.thisjowi.otp.kafka.KafkaProducerService;
-import com.thisjowi.otp.repository.OtpRepository;
+import com.thisjowi.otp.repository.OtpDao;
 
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -17,38 +17,42 @@ import java.util.Optional;
 
 @Service
 public class OtpService {
-    
-    private static final Logger logger = LoggerFactory.getLogger(OtpService.class);
-    
-    @Autowired
-    private OtpRepository otpRepository;
-    
-    @Autowired
-    private KafkaProducerService kafkaProducerService;
 
+    private static final Logger logger = LoggerFactory.getLogger(OtpService.class);
+
+    private final OtpDao otpDao;
+    private final KafkaProducerService kafkaProducerService;
+
+    public OtpService(OtpDao otpDao, KafkaProducerService kafkaProducerService) {
+        this.otpDao = otpDao;
+        this.kafkaProducerService = kafkaProducerService;
+    }
+
+    @Transactional(readOnly = true)
     public List<otp> getAllOtps(Long userId) {
         if (userId != null) {
-            return otpRepository.findByUserId(userId);
+            return otpDao.findByUserId(userId);
         }
         return List.of();
     }
 
+    @Transactional(readOnly = true)
     public Optional<otp> getOtp(Long id) {
-        return otpRepository.findById(id);
+        return otpDao.findById(id);
     }
 
+    @Transactional
     public otp createOtp(Long userId, String name, String type, String secret, String issuer, Integer digits, Integer period, String algorithm) {
-        // Check for duplicates if secret is provided
         if (secret != null && !secret.isEmpty()) {
             String normalizedSecret = secret.trim().replace(" ", "").toUpperCase();
-            List<otp> existing = otpRepository.findByUserId(userId);
+            List<otp> existing = otpDao.findByUserId(userId);
             for (otp entry : existing) {
                 String existingSecret = entry.getSecret();
                 if (existingSecret != null) {
                     String normalizedExisting = existingSecret.trim().replace(" ", "").toUpperCase();
                     if (normalizedExisting.equals(normalizedSecret)) {
                         logger.info("Duplicate OTP creation attempt prevented for user {} with secret ending in ...{}", userId, normalizedSecret.substring(Math.max(0, normalizedSecret.length() - 4)));
-                        return entry; // Return existing entry
+                        return entry;
                     }
                 }
             }
@@ -64,28 +68,25 @@ public class OtpService {
         o.setPeriod(period);
         o.setAlgorithm(algorithm);
         o.setValid(true);
-        o.setExpiresAt(System.currentTimeMillis() + (period != null ? period * 1000L : 30000L)); // Default 30s if null
+        o.setExpiresAt(System.currentTimeMillis() + (period != null ? period * 1000L : 30000L));
 
-        otp saved = otpRepository.save(o);
-        
-        // Send event to Kafka
+        otp saved = otpDao.insert(o);
+
         OtpCreatedEvent event = new OtpCreatedEvent(
-            saved.getId(), 
-            userId, 
-            name, 
-            type, 
-            "OTP_CREATED", 
-            System.currentTimeMillis(), 
+            saved.getId(),
+            userId,
+            name,
+            type,
+            "OTP_CREATED",
+            System.currentTimeMillis(),
             saved.getExpiresAt()
         );
         kafkaProducerService.sendOtpCreatedEvent(event);
-        
+
         return saved;
     }
-    
-    /**
-     * Create OTP for a specific user with userId
-     */
+
+    @Transactional
     public otp createOtpForUser(Long userId, String email, String type, long validitySeconds) {
         otp o = new otp();
         o.setUserId(userId);
@@ -94,9 +95,8 @@ public class OtpService {
         o.setValid(true);
         o.setExpiresAt(System.currentTimeMillis() + (validitySeconds * 1000));
         o.setSecret(generateSecret());
-        otp saved = otpRepository.save(o);
-        
-        // Send Kafka event with userId when OTP is created
+        otp saved = otpDao.insert(o);
+
         try {
             OtpCreatedEvent event = new OtpCreatedEvent(
                 saved.getId(),
@@ -112,23 +112,26 @@ public class OtpService {
         } catch (Exception e) {
             logger.error("Error sending OTP created event to Kafka", e);
         }
-        
+
         return saved;
     }
 
+    @Transactional
     public otp updateOtp(Long id, otp updatedOtp) {
         updatedOtp.setId(id);
-        return otpRepository.save(updatedOtp);
+        otpDao.update(updatedOtp);
+        return updatedOtp;
     }
 
+    @Transactional
     public void deleteOtp(Long id) {
-        otpRepository.deleteById(id);
+        otpDao.deleteById(id);
     }
 
+    @Transactional(readOnly = true)
     public boolean validateOtp(Long id, String code) {
-        Optional<otp> o = otpRepository.findById(id);
+        Optional<otp> o = otpDao.findById(id);
         if (o.isPresent() && o.get().getValid() && o.get().getExpiresAt() > System.currentTimeMillis()) {
-            // Aquí deberías implementar la validación TOTP/HOTP real
             return o.get().getSecret().equals(code);
         }
         return false;

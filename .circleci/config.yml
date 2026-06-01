@@ -1,10 +1,14 @@
 version: 2.1
 
 executors:
-  docker-executor:
+  amd64-executor:
     docker:
       - image: cimg/base:stable
     resource_class: medium
+  arm-executor:
+    docker:
+      - image: cimg/base:stable
+    resource_class: arm.medium
 
 commands:
 
@@ -77,36 +81,32 @@ commands:
             echo "Tag actualizado: << parameters.image >>:${CIRCLE_SHA1}"
 
 jobs:
-  build-notes:
-    executor: docker-executor
+  build-service:
+    parameters:
+      service:
+        type: string
+      image:
+        type: string
+    executor: amd64-executor
     steps:
       - docker-build-push:
-          service: note
-          image: thsjowi/note
+          service: << parameters.service >>
+          image: << parameters.image >>
 
-  build-otp:
-    executor: docker-executor
+  build-service-arm:
+    parameters:
+      service:
+        type: string
+      image:
+        type: string
+    executor: arm-executor
     steps:
       - docker-build-push:
-          service: otp
-          image: thsjowi/otp
-
-  build-password:
-    executor: docker-executor
-    steps:
-      - docker-build-push:
-          service: password
-          image: thsjowi/password
-
-  build-messages:
-    executor: docker-executor
-    steps:
-      - docker-build-push:
-          service: messages
-          image: thsjowi/messages
+          service: << parameters.service >>
+          image: << parameters.image >>
 
   deploy-argocd:
-    executor: docker-executor
+    executor: amd64-executor
     steps:
       - attach_workspace:
           at: /tmp/built
@@ -144,19 +144,59 @@ jobs:
 workflows:
   ci-cd:
     jobs:
-      - build-notes:
+      - build-service:
+          name: build-notes
+          service: note
+          image: thsjowi/note
           filters:
             branches:
               only: master
-      - build-otp:
+      - build-service:
+          name: build-otp
+          service: otp
+          image: thsjowi/otp
           filters:
             branches:
               only: master
-      - build-password:
+      - build-service:
+          name: build-password
+          service: password
+          image: thsjowi/password
           filters:
             branches:
               only: master
-      - build-messages:
+      - build-service:
+          name: build-messages
+          service: messages
+          image: thsjowi/messages
+          filters:
+            branches:
+              only: master
+      - build-service-arm:
+          name: build-notes-arm
+          service: note
+          image: thsjowi/note
+          filters:
+            branches:
+              only: master
+      - build-service-arm:
+          name: build-otp-arm
+          service: otp
+          image: thsjowi/otp
+          filters:
+            branches:
+              only: master
+      - build-service-arm:
+          name: build-password-arm
+          service: password
+          image: thsjowi/password
+          filters:
+            branches:
+              only: master
+      - build-service-arm:
+          name: build-messages-arm
+          service: messages
+          image: thsjowi/messages
           filters:
             branches:
               only: master
@@ -166,6 +206,10 @@ workflows:
             - build-otp
             - build-password
             - build-messages
+            - build-notes-arm
+            - build-otp-arm
+            - build-password-arm
+            - build-messages-arm
           filters:
             branches:
               only: master

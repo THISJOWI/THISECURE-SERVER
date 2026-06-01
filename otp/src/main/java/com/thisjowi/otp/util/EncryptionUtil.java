@@ -1,6 +1,7 @@
 package com.thisjowi.otp.util;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
@@ -11,6 +12,7 @@ import java.util.Arrays;
 import java.security.MessageDigest;
 
 @Component
+@RefreshScope
 public class EncryptionUtil {
 
     @Value("${app.encryption.key:ThisIsADefaultKeyForDevOnly123}")
