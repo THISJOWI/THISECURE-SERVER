@@ -17,18 +17,14 @@ let MessagesService = class MessagesService {
     constructor(cassandraService) {
         this.cassandraService = cassandraService;
     }
+    get messageClient() {
+        if (!this.cassandraService || !this.cassandraService.mapper) {
+            return null;
+        }
+        return this.cassandraService.mapper.forModel('Message');
+    }
     onModuleInit() {
-        try {
-            if (!this.cassandraService || !this.cassandraService.mapper) {
-                console.error('❌ CassandraService or mapper is not available');
-                return;
-            }
-            this.messageClient = this.cassandraService.mapper.forModel('Message');
-            console.log('✅ Message mapper initialized successfully');
-        }
-        catch (error) {
-            console.error('❌ Error initializing message mapper:', error.message);
-        }
+        console.log('ℹ️  MessagesService initialized');
     }
     // Helper to convert Cassandra result to array
     async toArray(result) {
@@ -47,19 +43,40 @@ let MessagesService = class MessagesService {
         return [];
     }
     async create(createMessageDto) {
+        let conversationId = createMessageDto.conversationId;
+        // If conversationId is 'new' or missing, we need to resolve it
+        if (!conversationId || conversationId === 'new') {
+            if (!createMessageDto.recipientId) {
+                throw new Error('Recipient ID is required to start a new conversation');
+            }
+            // Look for existing conversation between these two users
+            const existingConv = await this.createConversation([createMessageDto.senderId, createMessageDto.recipientId], createMessageDto.senderId);
+            if (existingConv.success && existingConv.data) {
+                conversationId = existingConv.data.id;
+                console.log(`Resolved conversationId: ${conversationId}`);
+            }
+            else {
+                conversationId = (0, uuid_1.v4)();
+            }
+        }
         const id = (0, uuid_1.v4)();
         const message = {
             id,
-            conversationId: createMessageDto.conversationId || (0, uuid_1.v4)(),
+            conversationId: conversationId,
             senderId: createMessageDto.senderId,
             recipientId: createMessageDto.recipientId,
             content: createMessageDto.content,
             sender: createMessageDto.sender,
             timestamp: new Date(),
             isRead: false,
+            isEncrypted: createMessageDto.isEncrypted || false,
+            ephemeralPublicKey: createMessageDto.ephemeralPublicKey || null,
             createdAt: new Date(),
         };
         console.log('Creating message:', JSON.stringify(message, null, 2));
+        if (!this.messageClient) {
+            throw new Error('Database client not initialized');
+        }
         try {
             await this.messageClient.insert(message);
             console.log('Message inserted successfully');
@@ -71,22 +88,22 @@ let MessagesService = class MessagesService {
         // Return the created message
         return message;
     }
-    async findAll() {
+    async findByUserId(userId) {
         try {
             if (!this.messageClient) {
-                console.warn('⚠️  Message client not initialized, returning empty array');
                 return [];
             }
-            const result = await this.messageClient.findAll();
-            return this.toArray(result);
+            const allMessages = await this.messageClient.findAll();
+            const messagesArray = await this.toArray(allMessages);
+            return messagesArray.filter((msg) => msg.senderId === userId || msg.recipientId === userId);
         }
         catch (error) {
-            console.error('❌ Error fetching all messages:', error.message);
+            console.error('❌ Error in findByUserId:', error);
             return [];
         }
     }
     async findByUsers(senderId, recipientId) {
-        const allMessages = await this.findAll();
+        const allMessages = await this.findByUserId(senderId);
         return allMessages.filter((msg) => (msg.senderId === senderId && msg.recipientId === recipientId) ||
             (msg.senderId === recipientId && msg.recipientId === senderId));
     }
@@ -100,84 +117,84 @@ let MessagesService = class MessagesService {
                 console.warn('⚠️  Message client not initialized in getConversationsForUser');
                 return [];
             }
-            const allMessages = await this.findAll();
-            console.log(`ℹ️  Found ${allMessages.length} total messages`);
+            const allMessages = await this.findByUserId(userId);
+            console.log(`ℹ️  Found ${allMessages.length} total messages for user ${userId}`);
             // Group by the OTHER user (not by conversationId) to avoid duplicates
             const conversations = new Map();
             allMessages.forEach((msg) => {
-                if (msg.senderId === userId || msg.recipientId === userId) {
-                    // Use the OTHER user's ID as the key to group all messages with that person
-                    const otherUserId = msg.senderId === userId ? msg.recipientId : msg.senderId;
-                    if (!conversations.has(otherUserId)) {
-                        conversations.set(otherUserId, {
-                            id: otherUserId,
-                            participants: [
-                                { id: userId, fullName: null, email: null },
-                                { id: otherUserId, fullName: null, email: null },
-                            ],
-                            lastMessage: {
-                                id: msg.id,
-                                conversationId: msg.conversationId,
-                                senderId: msg.senderId,
-                                content: msg.content,
-                                timestamp: msg.timestamp,
-                                isRead: msg.isRead,
-                            },
-                            unreadCount: (!msg.isRead && msg.recipientId === userId) ? 1 : 0,
-                            updatedAt: msg.timestamp,
-                        });
+                const otherUserId = msg.senderId === userId ? msg.recipientId : msg.senderId;
+                if (!otherUserId)
+                    return;
+                const convId = msg.conversationId || otherUserId;
+                if (!conversations.has(convId)) {
+                    conversations.set(convId, {
+                        id: convId,
+                        participants: [
+                            { id: userId, fullName: null, email: null },
+                            { id: otherUserId, fullName: null, email: null },
+                        ],
+                        lastMessage: {
+                            id: msg.id,
+                            conversationId: msg.conversationId,
+                            senderId: msg.senderId,
+                            content: msg.content,
+                            timestamp: msg.timestamp,
+                            isRead: msg.isRead,
+                            isEncrypted: msg.isEncrypted,
+                            ephemeralPublicKey: msg.ephemeralPublicKey,
+                        },
+                        unreadCount: (!msg.isRead && msg.recipientId === userId) ? 1 : 0,
+                        updatedAt: msg.timestamp,
+                    });
+                }
+                else {
+                    const existing = conversations.get(convId);
+                    if (new Date(msg.timestamp) > new Date(existing.updatedAt)) {
+                        existing.lastMessage = {
+                            id: msg.id,
+                            conversationId: msg.conversationId,
+                            senderId: msg.senderId,
+                            content: msg.content,
+                            timestamp: msg.timestamp,
+                            isRead: msg.isRead,
+                            isEncrypted: msg.isEncrypted,
+                            ephemeralPublicKey: msg.ephemeralPublicKey,
+                        };
+                        existing.updatedAt = msg.timestamp;
                     }
-                    else {
-                        // Update last message if this one is newer
-                        const existing = conversations.get(otherUserId);
-                        if (new Date(msg.timestamp) > new Date(existing.updatedAt)) {
-                            existing.lastMessage = {
-                                id: msg.id,
-                                conversationId: msg.conversationId,
-                                senderId: msg.senderId,
-                                content: msg.content,
-                                timestamp: msg.timestamp,
-                                isRead: msg.isRead,
-                            };
-                            existing.updatedAt = msg.timestamp;
-                        }
-                        if (!msg.isRead && msg.recipientId === userId) {
-                            existing.unreadCount++;
-                        }
+                    if (!msg.isRead && msg.recipientId === userId) {
+                        existing.unreadCount++;
                     }
                 }
             });
-            const result = Array.from(conversations.values());
-            console.log(`ℹ️  Returning ${result.length} conversations for user ${userId}`);
-            return result;
+            return Array.from(conversations.values());
         }
         catch (error) {
-            console.error('❌ Error in getConversationsForUser:', error.message);
+            console.error('❌ Error in getConversationsForUser:', error);
             throw error;
         }
     }
-    async getMessagesByConversation(conversationId) {
-        const allMessages = await this.findAll();
+    async getMessagesByConversation(conversationId, userId) {
+        const allMessages = await this.findByUserId(userId);
         return allMessages.filter((msg) => msg.conversationId === conversationId);
     }
     async getMessagesBetweenUsers(userId, recipientId) {
-        const allMessages = await this.findAll();
+        const allMessages = await this.findByUserId(userId);
         return allMessages
             .filter((msg) => (msg.senderId === userId && msg.recipientId === recipientId) ||
             (msg.senderId === recipientId && msg.recipientId === userId))
             .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     }
     async createConversation(participantIds, creatorId) {
-        // Check if conversation already exists between these participants
-        const allMessages = await this.findAll();
+        if (participantIds.length < 2) {
+            return { success: false, message: 'At least two participants required' };
+        }
+        const allMessages = await this.findByUserId(creatorId);
         const sortedParticipants = [...participantIds].sort();
-        // Look for existing conversation between these users
         for (const msg of allMessages) {
             const msgParticipants = [msg.senderId, msg.recipientId].sort();
             if (msgParticipants[0] === sortedParticipants[0] &&
                 msgParticipants[1] === sortedParticipants[1]) {
-                // Found existing conversation
-                console.log('Found existing conversation:', msg.conversationId);
                 return {
                     success: true,
                     data: {
@@ -201,25 +218,55 @@ let MessagesService = class MessagesService {
                 };
             }
         }
-        // No existing conversation found, create new one
         const conversationId = (0, uuid_1.v4)();
-        console.log('Creating new conversation:', conversationId);
-        // Create a conversation object
-        const conversation = {
-            id: conversationId,
-            participants: participantIds.map(id => ({
-                id: id,
-                fullName: null,
-                email: null,
-            })),
-            lastMessage: null,
-            unreadCount: 0,
-            updatedAt: new Date().toISOString(),
-        };
         return {
             success: true,
-            data: conversation,
+            data: {
+                id: conversationId,
+                participants: participantIds.map(id => ({
+                    id: id,
+                    fullName: null,
+                    email: null,
+                })),
+                lastMessage: null,
+                unreadCount: 0,
+                updatedAt: new Date().toISOString(),
+            },
         };
+    }
+    async markAsRead(conversationId, userId) {
+        try {
+            const client = this.messageClient;
+            if (!client)
+                return { success: false, message: 'Client not ready' };
+            const allMessages = await this.findByUserId(userId);
+            const unreadMessages = allMessages.filter((msg) => msg.conversationId === conversationId && msg.recipientId === userId && !msg.isRead);
+            for (const msg of unreadMessages) {
+                await client.update({ id: msg.id, isRead: true });
+            }
+            return { success: true };
+        }
+        catch (error) {
+            console.error('❌ Error marking as read:', error);
+            return { success: false, message: error.message };
+        }
+    }
+    async delete(id, userId, type = 'everyone') {
+        try {
+            const client = this.messageClient;
+            if (!client)
+                return { success: false, message: 'Client not ready' };
+            const msg = await client.get({ id });
+            if (msg && msg.senderId === userId) {
+                await client.remove({ id });
+                return { success: true };
+            }
+            return { success: false, message: 'Unauthorized or not found' };
+        }
+        catch (error) {
+            console.error('❌ Error deleting message:', error);
+            return { success: false, message: error.message };
+        }
     }
 };
 MessagesService = __decorate([

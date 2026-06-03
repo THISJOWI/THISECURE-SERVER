@@ -1,7 +1,0 @@
-apiVersion: traefik.io/v1alpha1
-kind: ServersTransport
-metadata:
-  name: cockroach-transport # El nombre base
-  namespace: thisjowi       # El namespace de la base de datos
-spec:
-  insecureSkipVerify: true

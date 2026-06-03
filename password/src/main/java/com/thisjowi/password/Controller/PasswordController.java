@@ -11,6 +11,7 @@ import com.thisjowi.password.Entity.PasswordDTO;
 import com.thisjowi.password.Service.PasswordService;
 import com.thisjowi.password.Service.PasswordDeduplicationService;
 import com.thisjowi.password.Utils.JwtUtil;
+import com.thisjowi.password.kafka.SyncEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +32,9 @@ public class PasswordController {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private SyncEventPublisher syncEventPublisher;
 
     @GetMapping
     public ResponseEntity<?> getPasswordsByToken(
@@ -95,6 +99,15 @@ public class PasswordController {
             Password password = passwordDTO.toEntity();
             Password saved = passwordService.savePasswordForTokenWithDeduplication(authHeader, password);
             log.info("POST /passwords: Created or updated password (no duplicates allowed)");
+
+            // Publish sync event
+            String userId = String.valueOf(extractUserIdFromToken(authHeader));
+            syncEventPublisher.publish(userId, "created", Map.of(
+                "id", String.valueOf(saved.getId()),
+                "title", saved.getName(),
+                "website", saved.getWebsite()
+            ));
+
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
         } catch (IllegalArgumentException e) {
             log.error("POST /passwords: Invalid argument - {}", e.getMessage());
@@ -132,6 +145,15 @@ public class PasswordController {
             Password passwordData = passwordDTO.toEntity();
             Password updated = passwordService.updatePasswordByToken(authHeader, id, passwordData);
             log.info("PUT /passwords/{}: Password updated", id);
+
+            // Publish sync event
+            String userId = String.valueOf(extractUserIdFromToken(authHeader));
+            syncEventPublisher.publish(userId, "updated", Map.of(
+                "id", String.valueOf(updated.getId()),
+                "title", updated.getName(),
+                "website", updated.getWebsite()
+            ));
+
             return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException e) {
             log.error("PUT /passwords/{}: Invalid argument - {}", id, e.getMessage());
@@ -166,6 +188,13 @@ public class PasswordController {
 
             passwordService.deletePasswordByToken(authHeader, id);
             log.info("DELETE /passwords/{}: Password deleted", id);
+
+            // Publish sync event
+            String userId = String.valueOf(extractUserIdFromToken(authHeader));
+            syncEventPublisher.publish(userId, "deleted", Map.of(
+                "id", String.valueOf(id)
+            ));
+
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             log.error("DELETE /passwords/{}: Invalid argument - {}", id, e.getMessage());

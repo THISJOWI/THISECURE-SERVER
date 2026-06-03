@@ -1,19 +1,20 @@
 package com.thisjowi.otp.controller;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import com.thisjowi.otp.entity.otp;
 import com.thisjowi.otp.service.OtpService;
 import com.thisjowi.otp.service.QrService;
+import com.thisjowi.otp.util.JwtUtil;
+import com.thisjowi.otp.util.EncryptionUtil;
+import com.thisjowi.otp.kafka.SyncEventPublisher;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -21,30 +22,41 @@ import java.util.Optional;
 @Tag(name = "OTP / Authenticator", description = "TOTP code generation, QR decoding, OTP validation and encrypted secret management")
 public class OtpController {
 
+    private static final Logger log = LoggerFactory.getLogger(OtpController.class);
+
     private final OtpService otpService;
     private final QrService qrService;
-    private final String encryptionKey;
+    private final JwtUtil jwtUtil;
+    private final EncryptionUtil encryptionUtil;
 
-    public OtpController(OtpService otpService, QrService qrService, @Value("${jwt.secret}") String encryptionKey) {
+    @Autowired
+    private SyncEventPublisher syncEventPublisher;
+
+    public OtpController(OtpService otpService, QrService qrService, JwtUtil jwtUtil, EncryptionUtil encryptionUtil) {
         this.otpService = otpService;
         this.qrService = qrService;
-        this.encryptionKey = encryptionKey;
+        this.jwtUtil = jwtUtil;
+        this.encryptionUtil = encryptionUtil;
     }
 
     @PostMapping("/decode-qr")
     public ResponseEntity<String> decodeQr(@RequestBody String base64Image) {
         try {
+            if (base64Image == null || base64Image.length() > 10_000_000) {
+                return ResponseEntity.status(400).body("Invalid QR image data");
+            }
             String qrText = qrService.decodeQrFromBase64(base64Image);
             return ResponseEntity.ok(qrText);
         } catch (Exception e) {
-            return ResponseEntity.status(400).body("Error al decodificar QR: " + e.getMessage());
+            log.error("Error decoding QR", e);
+            return ResponseEntity.status(400).body("Error decoding QR");
         }
     }
 
     @GetMapping
     public ResponseEntity<List<otp>> getAllOtps(
             @RequestHeader(value = "Authorization", required = false) String token) {
-        Long userId = extractUserIdFromToken(token);
+        Long userId = jwtUtil.extractUserId(token);
         if (userId == null) {
             return ResponseEntity.status(401).build();
         }
@@ -52,8 +64,17 @@ public class OtpController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<otp> getOtp(@PathVariable Long id) {
+    public ResponseEntity<otp> getOtp(
+            @RequestHeader(value = "Authorization", required = false) String token,
+            @PathVariable Long id) {
+        Long userId = jwtUtil.extractUserId(token);
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
         Optional<otp> o = otpService.getOtp(id);
+        if (o.isPresent() && !o.get().getUserId().equals(userId)) {
+            return ResponseEntity.status(403).build();
+        }
         return o.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -62,25 +83,31 @@ public class OtpController {
             @RequestHeader(value = "Authorization", required = false) String token,
             @RequestBody CreateOtpRequest request) {
 
-        Long userId = extractUserIdFromToken(token);
+        Long userId = jwtUtil.extractUserId(token);
         if (userId == null) {
             return ResponseEntity.status(401).build();
         }
 
+        String decryptedSecret = null;
         if (request.secret != null && !request.secret.isEmpty()) {
-            // Decrypt secret
-            request.secret = decrypt(request.secret);
-
-            // Log masked secret for debugging
-            String masked = request.secret.length() > 4 ? "..." + request.secret.substring(request.secret.length() - 4)
-                    : "***";
-            System.out.println("Received createOtp request for user " + userId + " with secret: " + masked);
-        } else {
-            System.out.println("Received createOtp request for user " + userId + " without secret");
+            try {
+                decryptedSecret = encryptionUtil.decrypt(request.secret);
+            } catch (Exception e) {
+                log.warn("Failed to decrypt secret for user {}, using as-is", userId);
+                decryptedSecret = request.secret;
+            }
         }
 
-        return ResponseEntity.ok(otpService.createOtp(userId, request.name, request.type, request.secret,
-                request.issuer, request.digits, request.period, request.algorithm));
+        otp created = otpService.createOtp(userId, request.name, request.type, decryptedSecret,
+                request.issuer, request.digits, request.period, request.algorithm);
+
+        syncEventPublisher.publish(String.valueOf(userId), "created", Map.of(
+            "id", String.valueOf(created.getId()),
+            "issuer", created.getIssuer() != null ? created.getIssuer() : "",
+            "label", created.getName() != null ? created.getName() : ""
+        ));
+
+        return ResponseEntity.ok(created);
     }
 
     public static class CreateOtpRequest {
@@ -94,85 +121,72 @@ public class OtpController {
     }
 
     @PutMapping("/{id}")
-    public otp updateOtp(@PathVariable Long id, @RequestBody otp updatedOtp) {
-        if (updatedOtp.getSecret() != null && !updatedOtp.getSecret().isEmpty()) {
-            updatedOtp.setSecret(decrypt(updatedOtp.getSecret()));
+    public ResponseEntity<?> updateOtp(
+            @RequestHeader(value = "Authorization", required = false) String token,
+            @PathVariable Long id, @RequestBody otp updatedOtp) {
+
+        Long userId = jwtUtil.extractUserId(token);
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
         }
-        return otpService.updateOtp(id, updatedOtp);
+
+        Optional<otp> existing = otpService.getOtp(id);
+        if (existing.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!existing.get().getUserId().equals(userId)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        if (updatedOtp.getSecret() != null && !updatedOtp.getSecret().isEmpty()) {
+            try {
+                updatedOtp.setSecret(encryptionUtil.decrypt(updatedOtp.getSecret()));
+            } catch (Exception e) {
+                log.warn("Failed to decrypt secret on update for otp {}", id);
+            }
+        }
+
+        otp updated = otpService.updateOtp(id, updatedOtp);
+
+        syncEventPublisher.publish(String.valueOf(userId), "updated", Map.of(
+            "id", String.valueOf(updated.getId()),
+            "issuer", updated.getIssuer() != null ? updated.getIssuer() : "",
+            "label", updated.getName() != null ? updated.getName() : ""
+        ));
+
+        return ResponseEntity.ok(updated);
     }
 
     @DeleteMapping("/{id}")
-    public void deleteOtp(@PathVariable Long id) {
+    public ResponseEntity<?> deleteOtp(
+            @RequestHeader(value = "Authorization", required = false) String token,
+            @PathVariable Long id) {
+
+        Long userId = jwtUtil.extractUserId(token);
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        Optional<otp> existing = otpService.getOtp(id);
+        if (existing.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!existing.get().getUserId().equals(userId)) {
+            return ResponseEntity.status(403).build();
+        }
+
         otpService.deleteOtp(id);
+
+        syncEventPublisher.publish(String.valueOf(userId), "deleted", Map.of(
+            "id", String.valueOf(id)
+        ));
+
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/validate")
     public ResponseEntity<String> validateOtp(@PathVariable Long id, @RequestParam String code) {
         boolean valid = otpService.validateOtp(id, code);
         return valid ? ResponseEntity.ok("OTP válido") : ResponseEntity.status(400).body("OTP inválido o expirado");
-    }
-
-    private String decrypt(String encryptedText) {
-        try {
-            // Check if it looks like base64 (simple check)
-            if (!encryptedText.matches("^[A-Za-z0-9+/=]+$")) {
-                return encryptedText;
-            }
-
-            byte[] combined = Base64.getDecoder().decode(encryptedText);
-
-            // Minimum length check (IV is 16 bytes)
-            if (combined.length < 16) {
-                return encryptedText;
-            }
-
-            // Extract IV (first 16 bytes)
-            byte[] iv = new byte[16];
-            System.arraycopy(combined, 0, iv, 0, 16);
-
-            // Extract ciphertext
-            byte[] ciphertext = new byte[combined.length - 16];
-            System.arraycopy(combined, 16, ciphertext, 0, ciphertext.length);
-
-            IvParameterSpec ivSpec = new IvParameterSpec(iv);
-            SecretKeySpec keySpec = new SecretKeySpec(encryptionKey.substring(0, 32).getBytes(StandardCharsets.UTF_8),
-                    "AES");
-
-            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING");
-            cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);
-
-            byte[] original = cipher.doFinal(ciphertext);
-            return new String(original, StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            System.err.println("Error decrypting secret: " + e.getMessage());
-            // If decryption fails, assume it's plain text (backward compatibility or error)
-            return encryptedText;
-        }
-    }
-
-    private Long extractUserIdFromToken(String token) {
-        if (token != null && token.startsWith("Bearer ")) {
-            token = token.substring(7);
-            try {
-                String[] parts = token.split("\\.");
-                if (parts.length == 3) {
-                    String payload = parts[1];
-                    int padding = 4 - (payload.length() % 4);
-                    if (padding != 4) {
-                        payload = payload + "=".repeat(padding);
-                    }
-                    byte[] decodedBytes = java.util.Base64.getUrlDecoder().decode(payload);
-                    String decodedString = new String(decodedBytes);
-                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                    com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(decodedString);
-                    if (node.has("sub")) {
-                        return Long.parseLong(node.get("sub").asText());
-                    }
-                }
-            } catch (Exception e) {
-                // Log error
-            }
-        }
-        return null;
     }
 }

@@ -1,8 +1,0 @@
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: linkerd-viz-web-auth
-  namespace: linkerd-viz
-spec:
-  basicAuth:
-    secret: web-ingress-auth

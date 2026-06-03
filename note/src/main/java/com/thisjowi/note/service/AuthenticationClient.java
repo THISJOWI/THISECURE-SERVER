@@ -1,13 +1,15 @@
 package com.thisjowi.note.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+
+import java.time.Duration;
 import java.util.Map;
 
 @Service
@@ -22,8 +24,6 @@ public class AuthenticationClient {
     }
 
     public boolean validateToken(String token) {
-        // The Authentication service doesn't expose a /validate endpoint.
-        // Reuse getUserIdFromToken: if it returns a valid id (>=0) the token is valid.
         Long id = getUserIdFromToken(token);
         return id != null && id != -1L;
     }
@@ -38,13 +38,12 @@ public class AuthenticationClient {
                 .exchangeToMono((ClientResponse resp) -> {
                     int statusCode = resp.statusCode().value();
                     log.debug("Auth service response status: {}", statusCode);
-                    
-                    // Handle redirects
+
                     if (statusCode >= 300 && statusCode < 400) {
                         log.warn("Auth service returned redirect {}", statusCode);
                         return Mono.just(-1L);
                     }
-                    
+
                     if (statusCode >= 200 && statusCode < 300) {
                         return resp.bodyToMono(Map.class)
                                 .map(body -> {
@@ -66,6 +65,7 @@ public class AuthenticationClient {
                                 });
                     }
                 })
+                .timeout(Duration.ofSeconds(5))
                 .onErrorResume(e -> {
                     log.error("Error calling auth service to get user id", e);
                     return Mono.just(-1L);

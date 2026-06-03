@@ -3,172 +3,116 @@ package com.thisjowi.note.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 
-
 @Component
-@RefreshScope
 public class EncryptionUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(EncryptionUtil.class);
-    
+
+    private static final String AES_ALGORITHM = "AES/GCM/NoPadding";
+    private static final int AES_KEY_SIZE = 32;
+    private static final int IV_SIZE = 12;
+    private static final int TAG_SIZE = 128;
+
     private final byte[] secretKeyBytes;
-    private static final int AES_KEY_SIZE = 32; // 256 bits
-    private static final int IV_SIZE = 16; // 128 bits for AES
-    private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
-    private static final String KEY_ALGORITHM = "AES";
-    
-    // Static instance for static method access (initialized by Spring)
+
     private static EncryptionUtil instance;
 
-    /**
-     * Initialize encryption utility with secret key from application.yml configuration.
-     * Uses ${JWT_SECRET} environment variable via Spring injection.
-     * 
-     * @param secretKey the encryption secret key (minimum 32 characters)
-     */
-    public EncryptionUtil(@Value("${jwt.secret}") String secretKey) {
+    public EncryptionUtil(@Value("${encryption.secret-key}") String secretKey) {
         if (secretKey == null || secretKey.trim().isEmpty()) {
-            throw new IllegalArgumentException("Encryption secret key must be provided via jwt.secret property");
+            throw new IllegalArgumentException("encryption.secret-key must be provided");
         }
-        
         if (secretKey.length() < AES_KEY_SIZE) {
-            throw new IllegalArgumentException("Encryption secret key must be at least " + AES_KEY_SIZE + " characters long (256 bits). Current length: " + secretKey.length());
+            throw new IllegalArgumentException("encryption.secret-key must be at least " + AES_KEY_SIZE + " characters");
         }
-        
-        // Generate consistent key bytes using SHA-256
-        this.secretKeyBytes = generateKeyBytes(secretKey);
-        
-        // Set static instance for static method access
+        this.secretKeyBytes = deriveKeyBytes(secretKey);
         instance = this;
-        
-        logger.info("[Encryption] Encryption utility initialized successfully with key length: {} chars -> {} bits", secretKey.length(), this.secretKeyBytes.length * 8);
+        logger.info("EncryptionUtil initialized with AES-256-GCM");
     }
 
-    /**
-     * Generate AES key bytes from secret key using SHA-256.
-     */
-    private static byte[] generateKeyBytes(String secretKey) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return digest.digest(secretKey.getBytes(StandardCharsets.UTF_8));
-        } catch (NoSuchAlgorithmException e) {
-            logger.error("[Encryption] SHA-256 algorithm not available", e);
-            throw new RuntimeException("SHA-256 algorithm not found", e);
-        }
+    private static byte[] deriveKeyBytes(String secretKey) {
+        byte[] keyBytes = new byte[AES_KEY_SIZE];
+        byte[] secretBytes = secretKey.getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(secretBytes, 0, keyBytes, 0, Math.min(secretBytes.length, keyBytes.length));
+        return keyBytes;
     }
 
-    /**
-     * Encrypt plaintext using AES-256-CBC with random IV.
-     * 
-     * @param plaintext the text to encrypt
-     * @return Base64-encoded string containing IV + ciphertext
-     * @throws RuntimeException if encryption fails
-     */
     public static String encrypt(String plaintext) {
         if (instance == null) {
-            throw new IllegalStateException("EncryptionUtil not initialized. Ensure Spring context is loaded.");
+            throw new IllegalStateException("EncryptionUtil not initialized");
         }
         if (plaintext == null || plaintext.isEmpty()) {
-            logger.warn("[Encryption] Attempt to encrypt null or empty plaintext");
             return plaintext;
         }
 
         try {
-            // Generate random IV
-            SecureRandom random = new SecureRandom();
             byte[] iv = new byte[IV_SIZE];
+            SecureRandom random = new SecureRandom();
             random.nextBytes(iv);
 
-            // Create cipher
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            SecretKeySpec keySpec = new SecretKeySpec(instance.secretKeyBytes, 0, AES_KEY_SIZE, KEY_ALGORITHM);
-            IvParameterSpec ivSpec = new IvParameterSpec(iv);
-            cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec);
+            Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
+            SecretKeySpec keySpec = new SecretKeySpec(instance.secretKeyBytes, 0, AES_KEY_SIZE, "AES");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(TAG_SIZE, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec, gcmSpec);
 
-            // Encrypt
             byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
 
-            // Concatenate IV + ciphertext
-            byte[] ivAndEncrypted = new byte[IV_SIZE + encrypted.length];
-            System.arraycopy(iv, 0, ivAndEncrypted, 0, IV_SIZE);
-            System.arraycopy(encrypted, 0, ivAndEncrypted, IV_SIZE, encrypted.length);
+            byte[] combined = new byte[IV_SIZE + encrypted.length];
+            System.arraycopy(iv, 0, combined, 0, IV_SIZE);
+            System.arraycopy(encrypted, 0, combined, IV_SIZE, encrypted.length);
 
-            // Base64 encode
-            String result = Base64.getEncoder().encodeToString(ivAndEncrypted);
-            logger.debug("[Encryption] Data encrypted successfully (plaintext length: {}, encrypted length: {})", plaintext.length(), result.length());
-            return result;
+            return Base64.getEncoder().encodeToString(combined);
         } catch (Exception e) {
-            logger.error("[Encryption] Encryption failed", e);
-            throw new RuntimeException("Error encrypting data: " + e.getMessage(), e);
+            logger.error("Encryption failed", e);
+            throw new RuntimeException("Error encrypting data", e);
         }
     }
 
-    /**
-     * Decrypt Base64-encoded ciphertext using AES-256-CBC.
-     * 
-     * @param encryptedText Base64-encoded string containing IV + ciphertext
-     * @return decrypted plaintext
-     * @throws RuntimeException if decryption fails
-     */
     public static String decrypt(String encryptedText) {
         if (instance == null) {
-            throw new IllegalStateException("EncryptionUtil not initialized. Ensure Spring context is loaded.");
+            throw new IllegalStateException("EncryptionUtil not initialized");
         }
         if (encryptedText == null || encryptedText.isBlank()) {
-            logger.warn("[Encryption] Attempt to decrypt null or empty text");
             return encryptedText;
         }
 
         try {
-            // Base64 decode
-            byte[] decodedBytes;
+            byte[] combined;
             try {
-                decodedBytes = Base64.getDecoder().decode(encryptedText);
+                combined = Base64.getDecoder().decode(encryptedText);
             } catch (IllegalArgumentException e) {
-                logger.warn("[Encryption] Invalid Base64 format, returning original string");
+                logger.warn("Invalid Base64 format, returning original string");
                 return encryptedText;
             }
 
-            // Validate minimum length (IV + at least one block)
-            if (decodedBytes.length < IV_SIZE + 16) {
-                logger.warn("[Encryption] Encrypted data too short, returning original string");
+            if (combined.length < IV_SIZE) {
+                logger.warn("Encrypted data too short, returning original string");
                 return encryptedText;
             }
 
-            // Extract IV
             byte[] iv = new byte[IV_SIZE];
-            System.arraycopy(decodedBytes, 0, iv, 0, IV_SIZE);
+            byte[] ciphertext = new byte[combined.length - IV_SIZE];
+            System.arraycopy(combined, 0, iv, 0, IV_SIZE);
+            System.arraycopy(combined, IV_SIZE, ciphertext, 0, ciphertext.length);
 
-            // Extract ciphertext
-            byte[] ciphertext = new byte[decodedBytes.length - IV_SIZE];
-            System.arraycopy(decodedBytes, IV_SIZE, ciphertext, 0, decodedBytes.length - IV_SIZE);
+            Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
+            SecretKeySpec keySpec = new SecretKeySpec(instance.secretKeyBytes, 0, AES_KEY_SIZE, "AES");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(TAG_SIZE, iv);
+            cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec);
 
-            // Create cipher
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            SecretKeySpec keySpec = new SecretKeySpec(instance.secretKeyBytes, 0, AES_KEY_SIZE, KEY_ALGORITHM);
-            IvParameterSpec ivSpec = new IvParameterSpec(iv);
-            cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);
-
-            // Decrypt
             byte[] decrypted = cipher.doFinal(ciphertext);
-            String result = new String(decrypted, StandardCharsets.UTF_8);
-            logger.debug("[Encryption] Data decrypted successfully (encrypted length: {}, decrypted length: {})", encryptedText.length(), result.length());
-            return result;
+            return new String(decrypted, StandardCharsets.UTF_8);
         } catch (Exception e) {
-            logger.error("[Encryption] Decryption failed", e);
-            throw new RuntimeException("Error decrypting data: " + e.getMessage(), e);
+            logger.error("Decryption failed", e);
+            throw new RuntimeException("Error decrypting data", e);
         }
     }
 }
-

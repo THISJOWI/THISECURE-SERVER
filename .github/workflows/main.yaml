@@ -1,0 +1,441 @@
+name: Continuous Integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+  pull_request:
+
+env:
+  COMMIT_SHA: ${{ github.sha }}
+  COMMIT_BRANCH: ${{ github.ref_name }}
+  COMMIT_AUTHOR: ${{ github.actor }}
+  COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp || github.event.pull_request.head.repo.updated_at || '' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+      branch: ${{ steps.refs.outputs.branch }}
+      sha: ${{ steps.refs.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: refs
+        run: |
+          echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - id: build-matrix
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'matrix=["note","password","otp","messages"]' >> $GITHUB_OUTPUT
+          else
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              BASE="${{ github.event.pull_request.base.sha }}"
+            else
+              BASE="${{ github.event.before }}"
+            fi
+            CHANGED=$(git diff --name-only "${BASE}" HEAD | cut -d/ -f1 | sort -u | grep -E '^(note|password|otp|messages)$' | jq -R -s -c 'split("\n")[:-1]')
+            echo "matrix=${CHANGED:-[]}" >> $GITHUB_OUTPUT
+          fi
+
+  process:
+    needs: changes
+    if: ${{ needs.changes.outputs.matrix != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hadolint — Dockerfile lint
+        id: hadolint
+        continue-on-error: true
+        uses: hadolint/hadolint-action@v3.3.0
+        with:
+          dockerfile: ${{ matrix.service }}/Dockerfile
+
+      - name: Trivy — filesystem scan (CRITICAL+HIGH)
+        id: trivy-fs
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: ${{ matrix.service }}
+          format: json
+          output: ${{ matrix.service }}-trivy-fs.json
+          severity: CRITICAL,HIGH
+
+      - name: Trivy — IaC misconfigurations
+        id: trivy-iac
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: ${{ matrix.service }}
+          format: json
+          output: ${{ matrix.service }}-trivy-config.json
+
+      - name: Gitleaks — secrets detection
+        id: gitleaks
+        continue-on-error: true
+        run: |
+          curl -sL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz -C /usr/local/bin/ gitleaks
+          gitleaks detect \
+            --source="${{ matrix.service }}" \
+            --report-format=json \
+            --report-path="${{ matrix.service }}-gitleaks.json" \
+            --config=".gitleaks.toml" \
+            --no-git \
+            --no-banner
+        shell: bash
+
+      - name: Generate security report
+        id: security-report
+        run: |
+          COMMIT="${{ env.COMMIT_SHA }}"
+          BRANCH="${{ env.COMMIT_BRANCH }}"
+          AUTHOR="${{ env.COMMIT_AUTHOR }}"
+          TIMESTAMP="${{ env.COMMIT_TIMESTAMP }}"
+          SERVICE="${{ matrix.service }}"
+
+          HADOLINT_STATUS="${{ steps.hadolint.outcome }}"
+          TRIVY_FS_STATUS="${{ steps.trivy-fs.outcome }}"
+          TRIVY_IAC_STATUS="${{ steps.trivy-iac.outcome }}"
+          GITLEAKS_STATUS="${{ steps.gitleaks.outcome }}"
+
+          TRIVY_FS_COUNT=0
+          if [ -f "${{ matrix.service }}-trivy-fs.json" ]; then
+            TRIVY_FS_COUNT=$(jq '.Results | length' ${{ matrix.service }}-trivy-fs.json 2>/dev/null || echo 0)
+          fi
+
+          GITLEAKS_COUNT=0
+          if [ -f "${{ matrix.service }}-gitleaks.json" ]; then
+            GITLEAKS_COUNT=$(jq '. | length' ${{ matrix.service }}-gitleaks.json 2>/dev/null || echo 0)
+          fi
+
+          OVERALL="PASS"
+          if [ "$HADOLINT_STATUS" = "failure" ] || [ "$TRIVY_FS_STATUS" = "failure" ] || [ "$TRIVY_IAC_STATUS" = "failure" ] || [ "$GITLEAKS_STATUS" = "failure" ]; then
+            OVERALL="FAIL"
+          fi
+
+          {
+            echo "# Security Report — $SERVICE"
+            echo ""
+            echo "## Commit Context"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Commit** | \`${COMMIT}\` |"
+            echo "| **Branch** | \`${BRANCH}\` |"
+            echo "| **Author** | ${AUTHOR} |"
+            echo "| **Timestamp** | ${TIMESTAMP} |"
+            echo "| **Workflow** | \`${{ github.workflow }}\` |"
+            echo "| **Run ID** | ${{ github.run_id }} |"
+            echo ""
+            echo "## Overall Verdict: **${OVERALL}**"
+            echo ""
+            echo "## Tool Results"
+            echo ""
+            echo "| Tool | Status | Details |"
+            echo "|------|--------|---------|"
+            echo "| **Hadolint** (Dockerfile lint) | ${HADOLINT_STATUS} | Review warnings in artifact |"
+            echo "| **Trivy FS** (filesystem vulns) | ${TRIVY_FS_STATUS} | ${TRIVY_FS_COUNT} result groups |"
+            echo "| **Trivy IaC** (misconfigs) | ${TRIVY_IAC_STATUS} | See IaC report artifact |"
+            echo "| **Gitleaks** (secrets) | ${GITLEAKS_STATUS} | ${GITLEAKS_COUNT} findings |"
+            echo ""
+            echo "## Artifacts"
+            echo ""
+            echo "- Trivy filesystem: \`${{ matrix.service }}-trivy-fs.json\`"
+            echo "- Trivy IaC: \`${{ matrix.service }}-trivy-config.json\`"
+            echo "- Gitleaks: \`${{ matrix.service }}-gitleaks.json\`"
+            echo ""
+            echo "---"
+            echo "_Generated by CI run #${{ github.run_id }} | Commit \`${COMMIT:0:7}\` on \`${BRANCH}\`_"
+          } > ${{ matrix.service }}-security-report.md
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report-${{ matrix.service }}
+          path: |
+            ${{ matrix.service }}-security-report.md
+            ${{ matrix.service }}-trivy-fs.json
+            ${{ matrix.service }}-trivy-config.json
+            ${{ matrix.service }}-gitleaks.json
+          retention-days: 30
+
+      - name: Check build conditions
+        id: build-check
+        run: |
+          SHOULD_BUILD="true"
+
+          if [ "${{ steps.hadolint.outcome }}" = "failure" ] || \
+             [ "${{ steps.trivy-fs.outcome }}" = "failure" ] || \
+             [ "${{ steps.trivy-iac.outcome }}" = "failure" ] || \
+             [ "${{ steps.gitleaks.outcome }}" = "failure" ]; then
+            SHOULD_BUILD="false"
+          fi
+
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && \
+             [ "${{ github.ref_name }}" != "master" ] && \
+             [ "${{ github.ref_name }}" != "develop" ]; then
+            SHOULD_BUILD="false"
+          fi
+
+          echo "should_build=${SHOULD_BUILD}" >> $GITHUB_OUTPUT
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.service == 'messages' && 'javascript-typescript' || 'java' }}
+          queries: security-and-quality
+
+      - name: Set up JDK 21
+        if: ${{ matrix.service != 'messages' }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        if: ${{ matrix.service != 'messages' }}
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build ${{ matrix.service }}
+        if: ${{ matrix.service != 'messages' }}
+        run: ./gradlew compileJava --no-daemon
+        working-directory: ${{ matrix.service }}
+
+      - name: Install dependencies
+        if: ${{ matrix.service == 'messages' }}
+        run: npm ci
+        working-directory: ${{ matrix.service }}
+
+      - name: CodeQL Analyze
+        uses: github/codeql-action/analyze@v3
+
+      - name: Set up QEMU
+        if: steps.build-check.outputs.should_build == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.build-check.outputs.should_build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: steps.build-check.outputs.should_build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Docker tags
+        if: steps.build-check.outputs.should_build == 'true'
+        id: tags
+        run: |
+          BRANCH="${{ needs.changes.outputs.branch }}"
+          SHA="${{ needs.changes.outputs.sha }}"
+          if [ "$BRANCH" = "develop" ]; then
+            echo "tags=ghcr.io/${{ github.repository_owner }}/thisjowi-server-${{ matrix.service }}:dev,ghcr.io/${{ github.repository_owner }}/thisjowi-server-${{ matrix.service }}:dev-${SHA:0:7}" >> $GITHUB_OUTPUT
+          else
+            echo "tags=ghcr.io/${{ github.repository_owner }}/thisjowi-server-${{ matrix.service }}:${SHA:0:7},ghcr.io/${{ github.repository_owner }}/thisjowi-server-${{ matrix.service }}:latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push
+        if: steps.build-check.outputs.should_build == 'true'
+        id: buildx
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service }}
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.revision=${{ needs.changes.outputs.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Upload build logs on failure
+        if: failure() && steps.build-check.outputs.should_build == 'true'
+        run: |
+          docker logs $(docker ps -q) 2>/dev/null > ${{ matrix.service }}-build.log || true
+          echo "Build failed for ${{ matrix.service }}" > ${{ matrix.service }}-build-error.txt
+
+      - name: Upload build artifacts on failure
+        if: failure() && steps.build-check.outputs.should_build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: registry-failure-${{ matrix.service }}
+          path: |
+            ${{ matrix.service }}-build-error.txt
+            ${{ matrix.service }}-build.log
+          retention-days: 7
+
+  report-security:
+    needs: [changes, process]
+    if: always() && needs.changes.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all security reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: security-report-*
+          merge-multiple: true
+
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const reportFiles = fs.readdirSync('.').filter(f => f.endsWith('-security-report.md'));
+            const hasFailures = reportFiles.some(f => fs.readFileSync(f, 'utf8').includes('FAIL'));
+
+            if (!hasFailures) {
+              console.log('All checks passed');
+              return;
+            }
+
+            let body = '# \u{1F50E} Security Scan Failed\n\n';
+            body += `**Branch:** \`${context.refName}\` | **Commit:** \`${context.sha.slice(0, 7)}\` | **Run:** [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n\n`;
+
+            for (const rf of reportFiles) {
+              const service = rf.replace('-security-report.md', '');
+              const md = fs.readFileSync(rf, 'utf8');
+
+              if (!md.includes('FAIL')) continue;
+
+              body += `<details open><summary><strong>${service}</strong> — FAILED</summary>\n\n`;
+              body += '```\n';
+              body += md.trim();
+              body += '\n```\n\n';
+
+              const trivyFile = `${service}-trivy-fs.json`;
+              if (fs.existsSync(trivyFile)) {
+                try {
+                  const t = JSON.parse(fs.readFileSync(trivyFile, 'utf8'));
+                  const vulns = [];
+                  for (const r of (t.Results || [])) {
+                    for (const v of (r.Vulnerabilities || [])) {
+                      vulns.push(`| ${v.PkgName} | ${v.Severity} | ${v.VulnerabilityID} | ${(v.Title || 'N/A').slice(0, 100)} |`);
+                    }
+                  }
+                  if (vulns.length) {
+                    body += `#### Trivy: ${vulns.length} vulnerabilities\n`;
+                    body += '| Package | Severity | CVE | Title |\n|---------|----------|-----|-------|\n';
+                    body += vulns.slice(0, 50).join('\n') + '\n\n';
+                    if (vulns.length > 50) body += `_...and ${vulns.length - 50} more._\n\n`;
+                  }
+                } catch (e) { console.log(`trivy parse error: ${e}`); }
+              }
+
+              const gitleaksFile = `${service}-gitleaks.json`;
+              if (fs.existsSync(gitleaksFile)) {
+                try {
+                  const g = JSON.parse(fs.readFileSync(gitleaksFile, 'utf8'));
+                  if (g.length) {
+                    body += `#### Gitleaks: ${g.length} secret(s) found\n`;
+                    body += '| File | Rule | Severity |\n|------|------|----------|\n';
+                    for (const item of g.slice(0, 30)) {
+                      body += `| \`${item.File}\` | ${item.RuleID} | ${item.Severity} |\n`;
+                    }
+                    body += '\n';
+                    if (g.length > 30) body += `_...and ${g.length - 30} more._\n\n`;
+                  }
+                } catch (e) { console.log(`gitleaks parse error: ${e}`); }
+              }
+
+              body += `_Artifacts: [download](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})_\n`;
+              body += `</details>\n\n`;
+            }
+
+            try {
+              await github.rest.issues.getLabel({ owner: context.repo.owner, repo: context.repo.repo, name: 'security' });
+            } catch {
+              await github.rest.issues.createLabel({ owner: context.repo.owner, repo: context.repo.repo, name: 'security', color: 'e99695', description: 'Security vulnerabilities and issues' });
+            }
+
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `\u{1F50E} Security Alert — ${context.refName} — ${new Date().toISOString().slice(0, 10)}`,
+              body,
+              labels: ['security'],
+            });
+
+            console.log(`Created issue #${issue.number}: ${issue.html_url}`)
+
+  report-registry:
+    needs: [changes, process]
+    if: always() && needs.changes.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: registry-failure-*
+          merge-multiple: true
+
+      - name: Create issue for registry failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const branch = '${{ needs.changes.outputs.branch }}';
+            const sha = '${{ needs.changes.outputs.sha }}';
+
+            const errorFiles = fs.readdirSync('.').filter(f => f.endsWith('-build-error.txt'));
+            if (errorFiles.length === 0) {
+              console.log('No build failures found');
+              return;
+            }
+
+            let body = '# \u{1F4E6} Registry Build Failed\n\n';
+            body += `**Branch:** \`${branch}\` | **Commit:** \`${sha.slice(0, 7)}\` | **Run:** [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n\n`;
+            body += 'Build and push failed for one or more services. Check the workflow logs for details.\n\n';
+
+            for (const f of errorFiles) {
+              const service = f.replace('-build-error.txt', '');
+              const msg = fs.readFileSync(f, 'utf8').trim();
+              body += `- **${service}**: ${msg}\n`;
+            }
+
+            body += `\n### Tags attempted\n`;
+            body += '- **develop**: `ghcr.io/${{ github.repository_owner }}/thisjowi-server-{service}:dev`\n';
+            body += '- **master**: `ghcr.io/${{ github.repository_owner }}/thisjowi-server-{service}:{sha}`, `ghcr.io/${{ github.repository_owner }}/thisjowi-server-{service}:latest`\n';
+
+            try {
+              await github.rest.issues.getLabel({ owner: context.repo.owner, repo: context.repo.repo, name: 'registry' });
+            } catch {
+              await github.rest.issues.createLabel({ owner: context.repo.owner, repo: context.repo.repo, name: 'registry', color: 'fbca04', description: 'Registry build failures' });
+            }
+
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `\u{1F4E6} Registry Build Failed — ${branch} — ${new Date().toISOString().slice(0, 10)}`,
+              body,
+              labels: ['registry'],
+            });
+
+            console.log(`Created issue #${issue.number}: ${issue.html_url}`)

@@ -22,6 +22,11 @@ let CassandraService = class CassandraService {
             protocolOptions: {
                 port: this.configService.get('CASSANDRA_PORT', 9042),
             },
+            queryOptions: { consistency: 1 },
+            socketOptions: {
+                connectTimeout: 30000,
+                readTimeout: 30000,
+            },
             authProvider: new cassandra_driver_1.auth.PlainTextAuthProvider(this.configService.get('CASSANDRA_USERNAME', 'cassandra'), this.configService.get('CASSANDRA_PASSWORD', 'cassandra')),
         });
     }
@@ -40,38 +45,38 @@ let CassandraService = class CassandraService {
         }
       `);
             console.log(`✅ Keyspace '${keyspace}' ready`);
+            // Give Cassandra a moment to reach schema agreement
+            await new Promise(resolve => setTimeout(resolve, 1000));
             // Switch to Keyspace
             await this.client.execute(`USE ${keyspace}`);
+            // CREATE TABLE FIRST
+            await this.createTableIfNotExists(keyspace);
+            // Wait for table schema propagation
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            // NOW initialize mapper
             this.mapper = new cassandra_driver_1.mapping.Mapper(this.client, {
                 models: {
                     'Message': {
                         tables: ['messages'],
+                        keyspace: keyspace,
                         mappings: new cassandra_driver_1.mapping.UnderscoreCqlToCamelCaseMappings()
                     }
                 }
             });
             console.log('✅ Mapper initialized');
-            await this.createTableIfNotExists();
         }
         catch (error) {
-            console.error('❌ Error initializing Cassandra:', error.message);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('❌ Error initializing Cassandra:', errorMessage);
             console.error('Full error:', error);
-            // Don't rethrow - let service continue with null mapper
         }
     }
-    async createTableIfNotExists() {
+    async createTableIfNotExists(keyspace) {
+        var _a, _b;
         try {
-            // Drop old table if schema changed (conversation_id was uuid, now text)
-            try {
-                await this.client.execute('DROP TABLE IF EXISTS messages');
-                console.log('ℹ️  Dropped old messages table for schema update');
-            }
-            catch (err) {
-                console.log('ℹ️  Table drop skipped:', (err === null || err === void 0 ? void 0 : err.message) || err);
-            }
-            // Create table with all required columns (conversation_id as TEXT to support user IDs)
+            // Create table with all required columns (explicit keyspace)
             const query = `
-        CREATE TABLE IF NOT EXISTS messages (
+        CREATE TABLE IF NOT EXISTS ${keyspace}.messages (
             id uuid PRIMARY KEY,
             conversation_id text,
             sender_id text,
@@ -80,15 +85,34 @@ let CassandraService = class CassandraService {
             sender text,
             timestamp timestamp,
             is_read boolean,
+            is_encrypted boolean,
+            ephemeral_public_key text,
             created_at timestamp
         )`;
             await this.client.execute(query);
-            console.log('✅ Messages table created with all columns');
-            // Create index for conversation_id to enable efficient queries
+            console.log(`✅ Table '${keyspace}.messages' ready`);
+            // Ensure new columns exist for E2EE (for existing tables)
+            const alterQueries = [
+                `ALTER TABLE ${keyspace}.messages ADD is_encrypted boolean`,
+                `ALTER TABLE ${keyspace}.messages ADD ephemeral_public_key text`
+            ];
+            for (const q of alterQueries) {
+                try {
+                    await this.client.execute(q);
+                    console.log(`✅ Altered table: ${q}`);
+                }
+                catch (e) {
+                    // Ignore if column already exists (Invalid query usually)
+                    if (!((_a = e.message) === null || _a === void 0 ? void 0 : _a.includes('already exists')) && !((_b = e.message) === null || _b === void 0 ? void 0 : _b.includes('Duplicate column name'))) {
+                        console.log(`ℹ️  Note on alter table: ${e.message}`);
+                    }
+                }
+            }
+            // Create index for conversation_id
             try {
                 await this.client.execute(`
           CREATE INDEX IF NOT EXISTS idx_messages_conversation_id 
-          ON messages (conversation_id)
+          ON ${keyspace}.messages (conversation_id)
         `);
                 console.log('✅ Index created on conversation_id');
             }
@@ -97,7 +121,8 @@ let CassandraService = class CassandraService {
             }
         }
         catch (error) {
-            console.error('❌ Error creating table:', error.message);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('❌ Error creating table:', errorMessage);
         }
     }
 };

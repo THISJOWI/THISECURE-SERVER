@@ -1,71 +1,88 @@
 package com.thisjowi.otp.util;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.SecureRandom;
 import java.util.Base64;
-import jakarta.annotation.PostConstruct;
-import java.util.Arrays;
-import java.security.MessageDigest;
 
 @Component
-@RefreshScope
 public class EncryptionUtil {
 
-    @Value("${app.encryption.key:ThisIsADefaultKeyForDevOnly123}")
-    private String secretKey;
+    private static final String AES_ALGORITHM = "AES/GCM/NoPadding";
+    private static final int AES_KEY_SIZE = 32;
+    private static final int IV_SIZE = 12;
+    private static final int TAG_SIZE = 128;
 
-    private static SecretKeySpec secretKeySpec;
+    private final byte[] secretKeyBytes;
 
-    @PostConstruct
-    public void init() {
-        setKey(secretKey);
+    public EncryptionUtil(@Value("${app.encryption.key}") String secretKey) {
+        if (secretKey == null || secretKey.trim().isEmpty()) {
+            throw new IllegalArgumentException("app.encryption.key must be provided");
+        }
+        if (secretKey.length() < AES_KEY_SIZE) {
+            throw new IllegalArgumentException("app.encryption.key must be at least " + AES_KEY_SIZE + " characters");
+        }
+        this.secretKeyBytes = deriveKeyBytes(secretKey);
     }
 
-    private static void setKey(String myKey) {
-        MessageDigest sha = null;
+    private static byte[] deriveKeyBytes(String secretKey) {
+        byte[] keyBytes = new byte[AES_KEY_SIZE];
+        byte[] secretBytes = secretKey.getBytes();
+        System.arraycopy(secretBytes, 0, keyBytes, 0, Math.min(secretBytes.length, keyBytes.length));
+        return keyBytes;
+    }
+
+    public String encrypt(String plaintext) {
+        if (plaintext == null) return null;
         try {
-            byte[] key = myKey.getBytes("UTF-8");
-            sha = MessageDigest.getInstance("SHA-1");
-            key = sha.digest(key);
-            key = Arrays.copyOf(key, 16);
-            secretKeySpec = new SecretKeySpec(key, "AES");
+            byte[] iv = new byte[IV_SIZE];
+            SecureRandom random = new SecureRandom();
+            random.nextBytes(iv);
+
+            Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
+            SecretKeySpec keySpec = new SecretKeySpec(secretKeyBytes, 0, AES_KEY_SIZE, "AES");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(TAG_SIZE, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec, gcmSpec);
+
+            byte[] encrypted = cipher.doFinal(plaintext.getBytes("UTF-8"));
+
+            byte[] combined = new byte[IV_SIZE + encrypted.length];
+            System.arraycopy(iv, 0, combined, 0, IV_SIZE);
+            System.arraycopy(encrypted, 0, combined, IV_SIZE, encrypted.length);
+
+            return Base64.getEncoder().encodeToString(combined);
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error encrypting data", e);
         }
     }
 
-    public static String encrypt(String strToEncrypt) {
-        if (strToEncrypt == null) return null;
-        if (secretKeySpec == null) {
-             // Try to initialize with default if not set (e.g. unit tests or early init)
-             // This is a fallback; normally Spring should init this via @PostConstruct
-             setKey("ThisIsADefaultKeyForDevOnly123");
-        }
+    public String decrypt(String ciphertext) {
+        if (ciphertext == null) return null;
         try {
-            Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec);
-            return Base64.getEncoder().encodeToString(cipher.doFinal(strToEncrypt.getBytes("UTF-8")));
-        } catch (Exception e) {
-            throw new RuntimeException("Error while encrypting: " + e.toString(), e);
-        }
-    }
+            byte[] combined = Base64.getDecoder().decode(ciphertext);
 
-    public static String decrypt(String strToDecrypt) {
-        if (strToDecrypt == null) return null;
-        if (secretKeySpec == null) {
-             setKey("ThisIsADefaultKeyForDevOnly123");
-        }
-        try {
-            Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-            cipher.init(Cipher.DECRYPT_MODE, secretKeySpec);
-            return new String(cipher.doFinal(Base64.getDecoder().decode(strToDecrypt)));
+            if (combined.length < IV_SIZE) {
+                throw new RuntimeException("Invalid ciphertext");
+            }
+
+            byte[] iv = new byte[IV_SIZE];
+            byte[] encrypted = new byte[combined.length - IV_SIZE];
+            System.arraycopy(combined, 0, iv, 0, IV_SIZE);
+            System.arraycopy(combined, IV_SIZE, encrypted, 0, encrypted.length);
+
+            Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
+            SecretKeySpec keySpec = new SecretKeySpec(secretKeyBytes, 0, AES_KEY_SIZE, "AES");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(TAG_SIZE, iv);
+            cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec);
+
+            byte[] decrypted = cipher.doFinal(encrypted);
+            return new String(decrypted, "UTF-8");
         } catch (Exception e) {
-            // Fallback: return original string if decryption fails (e.g. existing unencrypted data)
-            return strToDecrypt;
+            throw new RuntimeException("Error decrypting data", e);
         }
     }
 }

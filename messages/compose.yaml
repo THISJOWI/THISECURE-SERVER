@@ -21,7 +21,17 @@ services:
     volumes:
       - cassandra-data:/var/lib/cassandra
     healthcheck:
-      test: ["CMD", "cqlsh", "-u", "cassandra", "-p", "cassandra", "-e", "describe cluster"]
+      test:
+        [
+          "CMD",
+          "cqlsh",
+          "-u",
+          "cassandra",
+          "-p",
+          "cassandra",
+          "-e",
+          "describe cluster",
+        ]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -39,7 +49,7 @@ services:
       CASSANDRA_USERNAME: cassandra
       CASSANDRA_PASSWORD: cassandra
       CASSANDRA_KEYSPACE: messaging
-      AUTH_SERVICE_URL: http://auth:8082/api/v1/auth
+      AUTH_SERVICE_URL: http://auth:8082/v1/auth
     ports:
       - "8086:8086"
     depends_on:

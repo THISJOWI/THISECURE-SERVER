@@ -76,12 +76,10 @@ public class PasswordService {
     }
 
     public List<Password> getPasswordsByToken(String authHeader) {
-        log.debug("Attempting to extract userId from Authorization header");
-
         Long userId = extractUserIdFromToken(authHeader);
         if (userId == null) {
             log.warn("Failed to extract userId from Authorization header");
-            return null;
+            return Collections.emptyList();
         }
 
         log.info("User {} requested passwords", userId);

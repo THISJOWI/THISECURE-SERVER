@@ -3,7 +3,7 @@ spring:
     name: otp
   cloud:
     config:
-      uri: http://config:8888
+      uri: http://config.core:8888
       fail-fast: true
       retry:
         initial-interval: 1000

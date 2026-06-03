@@ -1,7 +1,6 @@
 package com.thisjowi.password.Utils;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +22,6 @@ import java.util.Base64;
  * ✓ Proper logging without exposing data
  */
 @Component
-@RefreshScope
 public class Encryption {
     private static final Logger log = LoggerFactory.getLogger(Encryption.class);
     

@@ -1,0 +1,15 @@
+title = "THISJOWI cloud gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+    '''(?:^|/)\.gradle(?:/.*)?$''',
+    '''(?:^|/)\.git(?:/.*)?$''',
+    '''(?:^|/)build(?:/.*)?$''',
+    '''(?:^|/)dist(?:/.*)?$''',
+    '''(?:^|/)node_modules(?:/.*)?$''',
+    '''(?:^|/)\.settings(?:/.*)?$''',
+    '''(?:^|/)bin(?:/.*)?$''',
+]
