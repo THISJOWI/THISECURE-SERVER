@@ -66,6 +66,40 @@ public class PasswordController {
         }
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getPasswordById(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
+            @PathVariable Long id) {
+        try {
+            if (authHeader == null || authHeader.isBlank()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Authorization header required"));
+            }
+
+            List<Password> list = passwordService.getPasswordsByToken(authHeader);
+            if (list == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Invalid or expired token"));
+            }
+
+            Password password = list.stream()
+                    .filter(p -> p.getId().equals(id))
+                    .findFirst()
+                    .orElse(null);
+
+            if (password == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Password not found"));
+            }
+
+            return ResponseEntity.ok(password);
+        } catch (Exception e) {
+            log.error("GET /passwords/{}: Unexpected error", id, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Internal server error"));
+        }
+    }
+
     @PostMapping
     public ResponseEntity<?> createPassword(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,

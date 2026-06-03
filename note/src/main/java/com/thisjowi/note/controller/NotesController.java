@@ -120,6 +120,25 @@ public class NotesController {
         return noteOpt.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/id/{id}")
+    public ResponseEntity<Note> getNoteById(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
+            @PathVariable Long id) {
+        String userId = extractUserIdFromToken(authHeader);
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
+        Optional<Note> noteOpt = noteDao.findById(id);
+        if (noteOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        Note note = noteOpt.get();
+        if (!note.getUserId().equals(userId)) {
+            return ResponseEntity.status(403).build();
+        }
+        return ResponseEntity.ok(note);
+    }
+
     @PutMapping("/{title}")
     public ResponseEntity<Note> updateNote(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
