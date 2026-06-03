@@ -43,6 +43,8 @@ RUN --mount=type=cache,target=/root/.gradle \
 # runtime dependencies for the application.
 FROM eclipse-temurin:21-jre-jammy AS final
 
+WORKDIR /app
+
 # Create a non-privileged user that the app will run under.
 ARG UID=10001
 RUN adduser \

@@ -51,6 +51,8 @@ RUN --mount=type=bind,source=build.gradle.kts,target=build.gradle.kts \
 # eclipse-temurin@sha256:99cede493dfd88720b610eb8077c8688d3cca50003d76d1d539b0efc8cca72b4.
 FROM eclipse-temurin:21-jre-jammy AS final
 
+WORKDIR /app
+
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/
 ARG UID=10001
