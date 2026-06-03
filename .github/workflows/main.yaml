@@ -181,10 +181,10 @@ jobs:
         run: |
           SHOULD_BUILD="true"
 
-          if [ "${{ steps.hadolint.outcome }}" = "failure" ] || \
-             [ "${{ steps.trivy-fs.outcome }}" = "failure" ] || \
-             [ "${{ steps.trivy-iac.outcome }}" = "failure" ] || \
-             [ "${{ steps.gitleaks.outcome }}" = "failure" ]; then
+          if [ "${{ steps.hadolint.conclusion }}" = "failure" ] || \
+             [ "${{ steps.trivy-fs.conclusion }}" = "failure" ] || \
+             [ "${{ steps.trivy-iac.conclusion }}" = "failure" ] || \
+             [ "${{ steps.gitleaks.conclusion }}" = "failure" ]; then
             SHOULD_BUILD="false"
           fi
 
