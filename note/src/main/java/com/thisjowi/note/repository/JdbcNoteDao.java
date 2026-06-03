@@ -95,7 +95,7 @@ public class JdbcNoteDao implements NoteDao {
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(
                     "INSERT INTO notes (content, title, created_at, user_id, version) VALUES (?, ?, ?, ?, ?)",
-                    Statement.RETURN_GENERATED_KEYS);
+                    new String[]{"id"});
             ps.setString(1, note.getContent());
             ps.setString(2, note.getTitle());
             ps.setTimestamp(3, Timestamp.valueOf(note.getCreatedAt()));
