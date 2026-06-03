@@ -28,7 +28,7 @@ public class JdbcNoteDao implements NoteDao {
         if (ts != null) {
             note.setCreatedAt(ts.toLocalDateTime());
         }
-        note.setUserId(rs.getLong("user_id"));
+        note.setUserId(rs.getString("user_id"));
         note.setVersion(rs.getLong("version"));
         return note;
     };
@@ -43,7 +43,7 @@ public class JdbcNoteDao implements NoteDao {
     }
 
     @Override
-    public List<Note> findByUserId(Long userId) {
+    public List<Note> findByUserId(String userId) {
         return jdbcTemplate.query("SELECT * FROM notes WHERE user_id = ? ORDER BY created_at DESC",
                 rowMapper, userId);
     }
@@ -55,7 +55,7 @@ public class JdbcNoteDao implements NoteDao {
     }
 
     @Override
-    public List<Note> findByTitleIgnoreCaseContainingAndUserId(String title, Long userId) {
+    public List<Note> findByTitleIgnoreCaseContainingAndUserId(String title, String userId) {
         return jdbcTemplate.query(
                 "SELECT * FROM notes WHERE user_id = ? AND LOWER(title) LIKE LOWER(?) ORDER BY created_at DESC",
                 rowMapper, userId, "%" + title + "%");
@@ -74,7 +74,7 @@ public class JdbcNoteDao implements NoteDao {
     }
 
     @Override
-    public Optional<Note> findByTitleIgnoreCaseAndUserId(String title, Long userId) {
+    public Optional<Note> findByTitleIgnoreCaseAndUserId(String title, String userId) {
         return jdbcTemplate.query(
                 "SELECT * FROM notes WHERE user_id = ? AND LOWER(title) = LOWER(?)", rowMapper, userId, title)
                 .stream().findFirst();
@@ -99,7 +99,7 @@ public class JdbcNoteDao implements NoteDao {
             ps.setString(1, note.getContent());
             ps.setString(2, note.getTitle());
             ps.setTimestamp(3, Timestamp.valueOf(note.getCreatedAt()));
-            ps.setLong(4, note.getUserId());
+            ps.setString(4, note.getUserId());
             ps.setLong(5, note.getVersion() != null ? note.getVersion() : 0L);
             return ps;
         }, keyHolder);

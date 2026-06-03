@@ -37,7 +37,7 @@ public class NotesController {
     @Autowired
     private SyncEventPublisher syncEventPublisher;
 
-    private Long extractUserIdFromToken(String authHeader) {
+    private String extractUserIdFromToken(String authHeader) {
         if (authHeader == null || authHeader.isEmpty()) {
             return null;
         }
@@ -45,8 +45,8 @@ public class NotesController {
             return null;
         }
         try {
-            Long userId = authenticationClient.getUserIdFromToken(authHeader);
-            return (userId != null && userId >= 0) ? userId : null;
+            String userId = authenticationClient.getUserIdFromToken(authHeader);
+            return (userId != null && !userId.isEmpty()) ? userId : null;
         } catch (Exception e) {
             log.error("Error extracting userId from token", e);
             return null;
@@ -57,7 +57,7 @@ public class NotesController {
     public ResponseEntity<Note> createNote(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
             @RequestBody NoteDTO noteDto) {
-        Long userId = extractUserIdFromToken(authHeader);
+        String userId = extractUserIdFromToken(authHeader);
         if (userId == null) {
             return ResponseEntity.status(401).build();
         }
@@ -69,7 +69,7 @@ public class NotesController {
         note.setUserId(userId);
         Note savedNote = notesService.saveNoteWithDeduplication(note);
 
-        syncEventPublisher.publish(String.valueOf(userId), "created", Map.of(
+        syncEventPublisher.publish(userId, "created", Map.of(
             "id", String.valueOf(savedNote.getId()),
             "title", savedNote.getTitle() != null ? savedNote.getTitle() : "",
             "version", String.valueOf(savedNote.getVersion())
@@ -81,7 +81,7 @@ public class NotesController {
     @GetMapping
     public ResponseEntity<List<Note>> getAllNotes(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
-        Long userId = extractUserIdFromToken(authHeader);
+        String userId = extractUserIdFromToken(authHeader);
         if (userId == null) {
             return ResponseEntity.status(401).build();
         }
@@ -93,7 +93,7 @@ public class NotesController {
     public ResponseEntity<List<Note>> searchNotes(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
             @RequestParam(value = "title", required = false) String title) {
-        Long userId = extractUserIdFromToken(authHeader);
+        String userId = extractUserIdFromToken(authHeader);
         if (userId == null) {
             return ResponseEntity.status(401).build();
         }
@@ -105,7 +105,7 @@ public class NotesController {
     public ResponseEntity<Note> getNoteByTitle(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
             @PathVariable String title) {
-        Long userId = extractUserIdFromToken(authHeader);
+        String userId = extractUserIdFromToken(authHeader);
         if (userId == null) {
             return ResponseEntity.status(401).build();
         }
@@ -118,7 +118,7 @@ public class NotesController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
             @PathVariable String title,
             @RequestBody NoteDTO noteDto) {
-        Long userId = extractUserIdFromToken(authHeader);
+        String userId = extractUserIdFromToken(authHeader);
         if (userId == null) {
             return ResponseEntity.status(401).build();
         }
@@ -126,7 +126,7 @@ public class NotesController {
         Note noteDetails = noteDto.toEntity();
         Optional<Note> updated = notesService.updateNoteByTitleAndUserId(title, noteDetails, userId);
 
-        updated.ifPresent(note -> syncEventPublisher.publish(String.valueOf(userId), "updated", Map.of(
+        updated.ifPresent(note -> syncEventPublisher.publish(userId, "updated", Map.of(
             "id", String.valueOf(note.getId()),
             "title", note.getTitle() != null ? note.getTitle() : "",
             "version", String.valueOf(note.getVersion())
@@ -139,7 +139,7 @@ public class NotesController {
     public ResponseEntity<Void> deleteNote(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
             @PathVariable Long id) {
-        Long userId = extractUserIdFromToken(authHeader);
+        String userId = extractUserIdFromToken(authHeader);
         if (userId == null) {
             return ResponseEntity.status(401).build();
         }
@@ -155,7 +155,7 @@ public class NotesController {
 
         boolean deleted = notesService.deleteNoteById(id);
         if (deleted) {
-            syncEventPublisher.publish(String.valueOf(userId), "deleted", Map.of(
+            syncEventPublisher.publish(userId, "deleted", Map.of(
                 "id", String.valueOf(id)
             ));
             return ResponseEntity.noContent().build();

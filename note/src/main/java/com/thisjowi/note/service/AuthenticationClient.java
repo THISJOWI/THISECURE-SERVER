@@ -24,16 +24,16 @@ public class AuthenticationClient {
     }
 
     public boolean validateToken(String token) {
-        Long id = getUserIdFromToken(token);
-        return id != null && id != -1L;
+        String id = getUserIdFromToken(token);
+        return id != null && !id.isEmpty();
     }
 
-    public Long getUserIdFromToken(String token) {
+    public String getUserIdFromToken(String token) {
         String headerValue = token != null && token.startsWith("Bearer ") ? token : ("Bearer " + token);
-        log.debug("Calling Authentication service /user endpoint to validate token");
+        log.debug("Calling Authentication service /me endpoint to validate token");
 
-        Mono<Long> mono = authenticationWebClient.get()
-                .uri("/v1/auth/user")
+        Mono<String> mono = authenticationWebClient.get()
+                .uri("/v1/auth/me")
                 .header(HttpHeaders.AUTHORIZATION, headerValue)
                 .exchangeToMono((ClientResponse resp) -> {
                     int statusCode = resp.statusCode().value();
@@ -41,42 +41,44 @@ public class AuthenticationClient {
 
                     if (statusCode >= 300 && statusCode < 400) {
                         log.warn("Auth service returned redirect {}", statusCode);
-                        return Mono.just(-1L);
+                        return Mono.just("");
                     }
 
                     if (statusCode >= 200 && statusCode < 300) {
                         return resp.bodyToMono(Map.class)
                                 .map(body -> {
                                     Object userIdObj = body.get("userId");
-                                    if (userIdObj instanceof Number) {
-                                        long userId = ((Number) userIdObj).longValue();
-                                        log.debug("Successfully extracted userId: {}", userId);
-                                        return userId;
+                                    if (userIdObj instanceof String) {
+                                        String userId = (String) userIdObj;
+                                        if (!userId.isEmpty()) {
+                                            log.debug("Successfully extracted userId: {}", userId);
+                                            return userId;
+                                        }
                                     }
                                     log.warn("Auth service returned body without valid userId: {}", body);
-                                    return -1L;
+                                    return "";
                                 });
                     } else {
                         return resp.bodyToMono(String.class)
                                 .defaultIfEmpty("(no body)")
                                 .flatMap(body -> {
                                     log.warn("Auth service returned {} with body: {}", statusCode, body);
-                                    return Mono.just(-1L);
+                                    return Mono.just("");
                                 });
                     }
                 })
                 .timeout(Duration.ofSeconds(5))
                 .onErrorResume(e -> {
                     log.error("Error calling auth service to get user id", e);
-                    return Mono.just(-1L);
+                    return Mono.just("");
                 });
 
         try {
-            Long result = mono.block();
-            return result != null ? result : -1L;
+            String result = mono.block();
+            return result != null ? result : "";
         } catch (Exception e) {
             log.error("Error blocking for user id", e);
-            return -1L;
+            return "";
         }
     }
 }

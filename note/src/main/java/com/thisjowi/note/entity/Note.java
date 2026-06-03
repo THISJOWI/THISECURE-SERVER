@@ -23,7 +23,7 @@ public class Note {
    @DateTimeFormat
    private LocalDateTime createdAt;
 
-   private Long userId;
+   private String userId;
 
    private Long version = 0L;
 

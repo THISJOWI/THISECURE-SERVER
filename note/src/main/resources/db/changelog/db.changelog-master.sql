@@ -18,3 +18,6 @@ CREATE INDEX IF NOT EXISTS idx_notes_title ON notes(title);
 
 -- changeset note:4 runOnChange:false
 CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at);
+
+-- changeset note:5 runOnChange:false
+ALTER TABLE notes ALTER COLUMN user_id TYPE TEXT;

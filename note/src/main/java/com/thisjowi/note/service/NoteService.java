@@ -76,7 +76,7 @@ public class NoteService {
             throw new IllegalArgumentException("UserId is required");
         }
 
-        Long userId = note.getUserId();
+        String userId = note.getUserId();
         String titleToCheck = note.getTitle() != null ? note.getTitle().trim() : "";
 
         if (titleToCheck.isEmpty()) {
@@ -88,6 +88,7 @@ public class NoteService {
         if (existingOptional.isPresent()) {
             Note existing = existingOptional.get();
             Long existingId = existing.getId();
+
             logger.info("Duplicate note detected for user {}, updating existing note id: {}", userId, existingId);
 
             if (note.getContent() != null && !note.getContent().isEmpty()) {
@@ -127,7 +128,7 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<Note> getNotesByUserId(Long userId) {
+    public List<Note> getNotesByUserId(String userId) {
         List<Note> notes = noteDao.findByUserId(userId);
         return notes.stream().map(this::decryptNote).toList();
     }
@@ -203,14 +204,14 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<Note> searchNotesByTitleAndUserId(String title, Long userId) {
+    public List<Note> searchNotesByTitleAndUserId(String title, String userId) {
         if (title == null) title = "";
         List<Note> notes = noteDao.findByTitleIgnoreCaseContainingAndUserId(title, userId);
         return notes.stream().map(this::decryptNote).toList();
     }
 
     @Transactional(readOnly = true)
-    public Optional<Note> getNoteByTitleAndUserId(String title, Long userId) {
+    public Optional<Note> getNoteByTitleAndUserId(String title, String userId) {
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("Cannot search for a blank note");
         }
@@ -219,7 +220,7 @@ public class NoteService {
     }
 
     @Transactional
-    public Optional<Note> updateNoteByTitleAndUserId(String title, Note noteDetails, Long userId) {
+    public Optional<Note> updateNoteByTitleAndUserId(String title, Note noteDetails, String userId) {
         if (title == null || title.isBlank()) return Optional.empty();
         Optional<Note> existingOpt = noteDao.findByTitleIgnoreCaseAndUserId(title, userId);
         if (existingOpt.isPresent()) {
@@ -246,7 +247,7 @@ public class NoteService {
     }
 
     @Transactional
-    public boolean deleteNoteByTitleAndUserId(String title, Long userId) {
+    public boolean deleteNoteByTitleAndUserId(String title, String userId) {
         if (title == null || title.isBlank()) return false;
         Optional<Note> existing = noteDao.findByTitleIgnoreCaseAndUserId(title, userId);
         if (existing.isPresent()) {
