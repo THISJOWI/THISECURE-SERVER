@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.thisjowi"
-version = "0.0.2-SNAPSHOT"
+version = "0.0.3-SNAPSHOT"
 description = "Demo project for Spring Boot"
 
 java {

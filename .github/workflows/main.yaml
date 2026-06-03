@@ -234,13 +234,12 @@ jobs:
         if: steps.build-check.outputs.should_build == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
+      - name: Login to Docker Hub
         if: steps.build-check.outputs.should_build == 'true'
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set Docker tags
         if: steps.build-check.outputs.should_build == 'true'
@@ -248,12 +247,10 @@ jobs:
         run: |
           BRANCH="${{ needs.changes.outputs.branch }}"
           SHA="${{ needs.changes.outputs.sha }}"
-          ORG="${{ github.repository_owner }}"
-          ORG="${ORG,,}"
           if [ "$BRANCH" = "develop" ]; then
-            echo "tags=ghcr.io/${ORG}/thisjowi-server-${{ matrix.service }}:dev,ghcr.io/${ORG}/thisjowi-server-${{ matrix.service }}:dev-${SHA:0:7}" >> $GITHUB_OUTPUT
+            echo "tags=thsjowi/${{ matrix.service }}:dev,thsjowi/${{ matrix.service }}:dev-${SHA:0:7}" >> $GITHUB_OUTPUT
           else
-            echo "tags=ghcr.io/${ORG}/thisjowi-server-${{ matrix.service }}:${SHA:0:7},ghcr.io/${ORG}/thisjowi-server-${{ matrix.service }}:latest" >> $GITHUB_OUTPUT
+            echo "tags=thsjowi/${{ matrix.service }}:${SHA:0:7},thsjowi/${{ matrix.service }}:latest" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and push
