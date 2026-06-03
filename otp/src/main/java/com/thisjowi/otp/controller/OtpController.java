@@ -104,7 +104,7 @@ public class OtpController {
         syncEventPublisher.publish(String.valueOf(userId), "created", Map.of(
             "id", String.valueOf(created.getId()),
             "issuer", created.getIssuer() != null ? created.getIssuer() : "",
-            "label", created.getName() != null ? created.getName() : ""
+            "label", created.getEmail() != null ? created.getEmail() : ""
         ));
 
         return ResponseEntity.ok(created);
@@ -151,7 +151,7 @@ public class OtpController {
         syncEventPublisher.publish(String.valueOf(userId), "updated", Map.of(
             "id", String.valueOf(updated.getId()),
             "issuer", updated.getIssuer() != null ? updated.getIssuer() : "",
-            "label", updated.getName() != null ? updated.getName() : ""
+            "label", updated.getEmail() != null ? updated.getEmail() : ""
         ));
 
         return ResponseEntity.ok(updated);

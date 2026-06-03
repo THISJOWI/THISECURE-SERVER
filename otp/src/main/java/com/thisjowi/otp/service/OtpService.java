@@ -70,7 +70,7 @@ public class OtpService {
         o.setValid(true);
         o.setExpiresAt(System.currentTimeMillis() + (period != null ? period * 1000L : 30000L));
 
-        otp saved = otpDao.insert(o);
+        otp saved = otpDao.save(o);
 
         OtpCreatedEvent event = new OtpCreatedEvent(
             saved.getId(),
@@ -95,7 +95,7 @@ public class OtpService {
         o.setValid(true);
         o.setExpiresAt(System.currentTimeMillis() + (validitySeconds * 1000));
         o.setSecret(generateSecret());
-        otp saved = otpDao.insert(o);
+        otp saved = otpDao.save(o);
 
         try {
             OtpCreatedEvent event = new OtpCreatedEvent(
@@ -119,7 +119,7 @@ public class OtpService {
     @Transactional
     public otp updateOtp(Long id, otp updatedOtp) {
         updatedOtp.setId(id);
-        otpDao.update(updatedOtp);
+        otpDao.save(updatedOtp);
         return updatedOtp;
     }
 
