@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import com.thisjowi.note.dto.NoteDTO;
 import com.thisjowi.note.entity.Note;
@@ -38,6 +40,11 @@ public class NotesController {
     private SyncEventPublisher syncEventPublisher;
 
     private String extractUserIdFromToken(String authHeader) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Long userId) {
+            return String.valueOf(userId);
+        }
+
         if (authHeader == null || authHeader.isEmpty()) {
             return null;
         }
