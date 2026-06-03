@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.thisjowi"
-version = "0.0.1-SNAPSHOT"
+version = "0.0.2-SNAPSHOT"
 description = "Authentication service"
 
 java {
