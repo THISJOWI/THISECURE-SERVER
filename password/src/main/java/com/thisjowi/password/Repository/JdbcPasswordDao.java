@@ -55,7 +55,7 @@ public class JdbcPasswordDao implements PasswordDao {
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(
                     "INSERT INTO password (password, name, website, user_id) VALUES (?, ?, ?, ?)",
-                    Statement.RETURN_GENERATED_KEYS);
+                    new String[]{"id"});
             ps.setString(1, password.getPassword());
             ps.setString(2, password.getName());
             ps.setString(3, password.getWebsite());
