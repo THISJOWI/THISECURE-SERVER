@@ -25,7 +25,8 @@ public class PasswordDeduplicationService {
                         p -> {
                             String name = p.getName() != null ? p.getName() : "";
                             String website = p.getWebsite() != null ? p.getWebsite() : "";
-                            return name + "::" + website;
+                            String username = p.getUsername() != null ? p.getUsername() : "";
+                            return name + "::" + website + "::" + username;
                         }
                 ));
 
@@ -35,6 +36,7 @@ public class PasswordDeduplicationService {
                 Map<String, Object> dup = new HashMap<>();
                 dup.put("name", entry.getValue().get(0).getName());
                 dup.put("website", entry.getValue().get(0).getWebsite());
+                dup.put("username", entry.getValue().get(0).getUsername());
                 dup.put("count", entry.getValue().size());
                 dup.put("ids", entry.getValue().stream().map(Password::getId).collect(Collectors.toList()));
                 duplicates.add(dup);
@@ -59,7 +61,8 @@ public class PasswordDeduplicationService {
                         p -> {
                             String name = p.getName() != null ? p.getName() : "";
                             String website = p.getWebsite() != null ? p.getWebsite() : "";
-                            return name + "::" + website;
+                            String username = p.getUsername() != null ? p.getUsername() : "";
+                            return name + "::" + website + "::" + username;
                         }
                 ));
 

@@ -33,6 +33,9 @@ public class PasswordService {
         if (password.getName() != null && !password.getName().isEmpty()) {
             password.setName(encryption.encrypt(password.getName()));
         }
+        if (password.getUsername() != null && !password.getUsername().isEmpty()) {
+            password.setUsername(encryption.encrypt(password.getUsername()));
+        }
 
         Password saved = passwordDao.insert(password);
 
@@ -121,6 +124,10 @@ public class PasswordService {
 
         if (passwordData.getWebsite() != null && !passwordData.getWebsite().trim().isEmpty()) {
             existing.setWebsite(passwordData.getWebsite().trim());
+        }
+
+        if (passwordData.getUsername() != null && !passwordData.getUsername().trim().isEmpty()) {
+            existing.setUsername(passwordData.getUsername().trim());
         }
 
         return updatePassword(existing);
@@ -219,6 +226,19 @@ public class PasswordService {
                 log.error("Failed to decrypt name/title field for id {}: {}", p.getId(), e.getMessage());
             }
         }
+
+        if (p.getUsername() != null) {
+            try {
+                String decrypted = encryption.decrypt(p.getUsername());
+                if (decrypted != null) {
+                    p.setUsername(decrypted);
+                } else {
+                    log.warn("Decryption returned null for username field of id {}, keeping encrypted", p.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to decrypt username field for id {}: {}", p.getId(), e.getMessage());
+            }
+        }
     }
 
     @Transactional
@@ -231,6 +251,9 @@ public class PasswordService {
         }
         if (password.getName() != null && !password.getName().isEmpty()) {
             password.setName(encryption.encrypt(password.getName()));
+        }
+        if (password.getUsername() != null && !password.getUsername().isEmpty()) {
+            password.setUsername(encryption.encrypt(password.getUsername()));
         }
 
         passwordDao.update(password);

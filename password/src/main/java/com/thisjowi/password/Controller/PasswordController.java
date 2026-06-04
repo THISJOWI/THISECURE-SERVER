@@ -139,7 +139,8 @@ public class PasswordController {
             syncEventPublisher.publish(userId, "created", Map.of(
                 "id", String.valueOf(saved.getId()),
                 "title", saved.getName(),
-                "website", saved.getWebsite()
+                "website", saved.getWebsite(),
+                "username", saved.getUsername()
             ));
 
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
@@ -185,7 +186,8 @@ public class PasswordController {
             syncEventPublisher.publish(userId, "updated", Map.of(
                 "id", String.valueOf(updated.getId()),
                 "title", updated.getName(),
-                "website", updated.getWebsite()
+                "website", updated.getWebsite(),
+                "username", updated.getUsername()
             ));
 
             return ResponseEntity.ok(updated);

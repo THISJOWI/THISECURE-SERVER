@@ -22,6 +22,9 @@ public class Password {
     @JsonProperty("website")
     String website;
 
+    @JsonProperty("username")
+    String username;
+
     @JsonProperty("userId")
     String userId;
 

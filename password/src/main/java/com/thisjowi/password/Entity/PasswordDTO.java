@@ -24,6 +24,9 @@ public class PasswordDTO {
     @JsonProperty("website")
     String website;
 
+    @JsonProperty("username")
+    String username;
+
     /**
      * Convert DTO to Entity
      */
@@ -32,6 +35,7 @@ public class PasswordDTO {
         password.setPassword(this.password);
         password.setName(this.name);
         password.setWebsite(this.website);
+        password.setUsername(this.username);
         return password;
     }
 }

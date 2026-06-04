@@ -23,6 +23,7 @@ public class JdbcPasswordDao implements PasswordDao {
         p.setPassword(rs.getString("password"));
         p.setName(rs.getString("name"));
         p.setWebsite(rs.getString("website"));
+        p.setUsername(rs.getString("username"));
         p.setUserId(rs.getString("user_id"));
         return p;
     };
@@ -54,12 +55,13 @@ public class JdbcPasswordDao implements PasswordDao {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(
-                    "INSERT INTO password (password, name, website, user_id) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO password (password, name, website, username, user_id) VALUES (?, ?, ?, ?, ?)",
                     new String[]{"id"});
             ps.setString(1, password.getPassword());
             ps.setString(2, password.getName());
             ps.setString(3, password.getWebsite());
-            ps.setString(4, password.getUserId());
+            ps.setString(4, password.getUsername());
+            ps.setString(5, password.getUserId());
             return ps;
         }, keyHolder);
 
@@ -73,8 +75,8 @@ public class JdbcPasswordDao implements PasswordDao {
     @Override
     public void update(Password password) {
         jdbcTemplate.update(
-                "UPDATE password SET password = ?, name = ?, website = ? WHERE id = ?",
-                password.getPassword(), password.getName(), password.getWebsite(), password.getId());
+                "UPDATE password SET password = ?, name = ?, website = ?, username = ? WHERE id = ?",
+                password.getPassword(), password.getName(), password.getWebsite(), password.getUsername(), password.getId());
     }
 
     @Override
