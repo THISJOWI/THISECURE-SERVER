@@ -88,7 +88,7 @@ public class JdbcOtpDao implements OtpDao {
     }
 
     @Override
-    public void deleteById(Long id) {
+    public void removeOtp(Long id) {
         jdbcTemplate.update("DELETE FROM otp WHERE id = ?", id);
     }
 }

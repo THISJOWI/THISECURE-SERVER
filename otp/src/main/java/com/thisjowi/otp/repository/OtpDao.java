@@ -15,5 +15,5 @@ public interface OtpDao {
 
     void update(otp otp);
 
-    void deleteById(Long id);
+    void removeOtp(Long id);
 }

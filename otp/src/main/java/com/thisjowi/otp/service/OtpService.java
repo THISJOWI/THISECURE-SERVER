@@ -125,7 +125,7 @@ public class OtpService {
 
     @Transactional
     public void deleteOtp(Long id) {
-        otpDao.deleteById(id);
+        otpDao.removeOtp(id);
     }
 
     @Transactional(readOnly = true)
