@@ -8,7 +8,6 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
-import java.sql.Statement;
 import java.util.List;
 import java.util.Optional;
 
@@ -57,7 +56,7 @@ public class JdbcOtpDao implements OtpDao {
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(
                     "INSERT INTO otp (user_id, email, secret, expires_at, type, issuer, digits, period, algorithm, valid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    Statement.RETURN_GENERATED_KEYS);
+                    new String[]{"id"});
             ps.setString(1, otp.getUserId());
             ps.setString(2, otp.getEmail());
             ps.setString(3, otp.getSecret());
