@@ -27,3 +27,8 @@ CREATE INDEX IF NOT EXISTS idx_otp_user_id ON otp(user_id);
 
 -- changeset otp:4 runOnChange:false
 CREATE INDEX IF NOT EXISTS idx_otp_key_user_id ON otp_key(user_id);
+
+-- changeset otp:5 runOnChange:false
+ALTER TABLE otp ALTER COLUMN user_id TYPE VARCHAR(255);
+ALTER TABLE otp ALTER COLUMN user_id DROP NOT NULL;
+ALTER TABLE otp ALTER COLUMN user_id SET DEFAULT NULL;

@@ -13,7 +13,7 @@ public class otp {
 
     private Long id;
 
-    private Long userId;
+    private String userId;
 
     private String email;
 

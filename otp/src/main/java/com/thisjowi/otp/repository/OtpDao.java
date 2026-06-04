@@ -12,7 +12,7 @@ import java.util.Optional;
 @Repository
 public interface OtpDao extends CrudRepository<otp, Long> {
 
-    List<otp> findByUserId(Long userId);
+    List<otp> findByUserId(String userId);
 
     @Query("SELECT * FROM otp WHERE id = :id")
     Optional<otp> findById(@Param("id") Long id);

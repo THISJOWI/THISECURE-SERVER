@@ -56,8 +56,8 @@ public class OtpController {
     @GetMapping
     public ResponseEntity<List<otp>> getAllOtps(
             @RequestHeader(value = "Authorization", required = false) String token) {
-        Long userId = jwtUtil.extractUserId(token);
-        if (userId == null) {
+        String userId = jwtUtil.extractUserId(token);
+        if (userId == null || userId.isEmpty()) {
             return ResponseEntity.status(401).build();
         }
         return ResponseEntity.ok(otpService.getAllOtps(userId));
@@ -67,8 +67,8 @@ public class OtpController {
     public ResponseEntity<otp> getOtp(
             @RequestHeader(value = "Authorization", required = false) String token,
             @PathVariable Long id) {
-        Long userId = jwtUtil.extractUserId(token);
-        if (userId == null) {
+        String userId = jwtUtil.extractUserId(token);
+        if (userId == null || userId.isEmpty()) {
             return ResponseEntity.status(401).build();
         }
         Optional<otp> o = otpService.getOtp(id);
@@ -83,8 +83,8 @@ public class OtpController {
             @RequestHeader(value = "Authorization", required = false) String token,
             @RequestBody CreateOtpRequest request) {
 
-        Long userId = jwtUtil.extractUserId(token);
-        if (userId == null) {
+        String userId = jwtUtil.extractUserId(token);
+        if (userId == null || userId.isEmpty()) {
             return ResponseEntity.status(401).build();
         }
 
@@ -101,7 +101,7 @@ public class OtpController {
         otp created = otpService.createOtp(userId, request.name, request.type, decryptedSecret,
                 request.issuer, request.digits, request.period, request.algorithm);
 
-        syncEventPublisher.publish(String.valueOf(userId), "created", Map.of(
+        syncEventPublisher.publish(userId, "created", Map.of(
             "id", String.valueOf(created.getId()),
             "issuer", created.getIssuer() != null ? created.getIssuer() : "",
             "label", created.getEmail() != null ? created.getEmail() : ""
@@ -125,8 +125,8 @@ public class OtpController {
             @RequestHeader(value = "Authorization", required = false) String token,
             @PathVariable Long id, @RequestBody otp updatedOtp) {
 
-        Long userId = jwtUtil.extractUserId(token);
-        if (userId == null) {
+        String userId = jwtUtil.extractUserId(token);
+        if (userId == null || userId.isEmpty()) {
             return ResponseEntity.status(401).build();
         }
 
@@ -148,7 +148,7 @@ public class OtpController {
 
         otp updated = otpService.updateOtp(id, updatedOtp);
 
-        syncEventPublisher.publish(String.valueOf(userId), "updated", Map.of(
+        syncEventPublisher.publish(userId, "updated", Map.of(
             "id", String.valueOf(updated.getId()),
             "issuer", updated.getIssuer() != null ? updated.getIssuer() : "",
             "label", updated.getEmail() != null ? updated.getEmail() : ""
@@ -162,8 +162,8 @@ public class OtpController {
             @RequestHeader(value = "Authorization", required = false) String token,
             @PathVariable Long id) {
 
-        Long userId = jwtUtil.extractUserId(token);
-        if (userId == null) {
+        String userId = jwtUtil.extractUserId(token);
+        if (userId == null || userId.isEmpty()) {
             return ResponseEntity.status(401).build();
         }
 
@@ -177,7 +177,7 @@ public class OtpController {
 
         otpService.deleteOtp(id);
 
-        syncEventPublisher.publish(String.valueOf(userId), "deleted", Map.of(
+        syncEventPublisher.publish(userId, "deleted", Map.of(
             "id", String.valueOf(id)
         ));
 

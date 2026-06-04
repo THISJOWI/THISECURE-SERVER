@@ -29,8 +29,8 @@ public class OtpService {
     }
 
     @Transactional(readOnly = true)
-    public List<otp> getAllOtps(Long userId) {
-        if (userId != null) {
+    public List<otp> getAllOtps(String userId) {
+        if (userId != null && !userId.isEmpty()) {
             return otpDao.findByUserId(userId);
         }
         return List.of();
@@ -42,7 +42,7 @@ public class OtpService {
     }
 
     @Transactional
-    public otp createOtp(Long userId, String name, String type, String secret, String issuer, Integer digits, Integer period, String algorithm) {
+    public otp createOtp(String userId, String name, String type, String secret, String issuer, Integer digits, Integer period, String algorithm) {
         if (secret != null && !secret.isEmpty()) {
             String normalizedSecret = secret.trim().replace(" ", "").toUpperCase();
             List<otp> existing = otpDao.findByUserId(userId);
@@ -87,7 +87,7 @@ public class OtpService {
     }
 
     @Transactional
-    public otp createOtpForUser(Long userId, String email, String type, long validitySeconds) {
+    public otp createOtpForUser(String userId, String email, String type, long validitySeconds) {
         otp o = new otp();
         o.setUserId(userId);
         o.setEmail(email);

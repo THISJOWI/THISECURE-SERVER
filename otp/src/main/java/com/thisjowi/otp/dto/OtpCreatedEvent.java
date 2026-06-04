@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class OtpCreatedEvent {
     private Long otpId;
-    private Long userId;
+    private String userId;
     private String email;
     private String type; // TOTP, HOTP
     private String eventType; // "OTP_CREATED"

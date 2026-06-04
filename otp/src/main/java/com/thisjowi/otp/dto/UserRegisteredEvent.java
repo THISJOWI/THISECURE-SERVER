@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserRegisteredEvent {
-    private Long userId;
+    private String userId;
     private String email;
     private String eventType; // "USER_REGISTERED"
     private Long timestamp;
