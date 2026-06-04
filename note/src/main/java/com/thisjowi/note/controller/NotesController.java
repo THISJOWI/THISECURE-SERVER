@@ -139,10 +139,10 @@ public class NotesController {
         return ResponseEntity.ok(note);
     }
 
-    @PutMapping("/{title}")
+    @PutMapping("/{id}")
     public ResponseEntity<Note> updateNote(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
-            @PathVariable String title,
+            @PathVariable Long id,
             @RequestBody NoteDTO noteDto) {
         String userId = extractUserIdFromToken(authHeader);
         if (userId == null) {
@@ -150,7 +150,7 @@ public class NotesController {
         }
 
         Note noteDetails = noteDto.toEntity();
-        Optional<Note> updated = notesService.updateNoteByTitleAndUserId(title, noteDetails, userId);
+        Optional<Note> updated = notesService.updateNoteById(id, noteDetails, userId);
 
         updated.ifPresent(note -> syncEventPublisher.publish(userId, "updated", Map.of(
             "id", String.valueOf(note.getId()),

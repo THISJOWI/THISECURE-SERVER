@@ -247,6 +247,32 @@ public class NoteService {
     }
 
     @Transactional
+    public Optional<Note> updateNoteById(Long id, Note noteDetails, String userId) {
+        Optional<Note> existingOpt = noteDao.findById(id);
+        if (existingOpt.isEmpty() || !existingOpt.get().getUserId().equals(userId)) {
+            return Optional.empty();
+        }
+        Note noteToUpdate = existingOpt.get();
+        if (noteDetails.getTitle() != null && !noteDetails.getTitle().isBlank()) {
+            noteToUpdate.setTitle(EncryptionUtil.encrypt(noteDetails.getTitle()));
+        }
+        if (noteDetails.getContent() != null) {
+            noteToUpdate.setContent(EncryptionUtil.encrypt(noteDetails.getContent()));
+        }
+        noteToUpdate.setUserId(userId);
+        noteDao.update(noteToUpdate);
+
+        Note response = new Note();
+        response.setId(noteToUpdate.getId());
+        response.setUserId(noteToUpdate.getUserId());
+        response.setCreatedAt(noteToUpdate.getCreatedAt());
+        response.setTitle(EncryptionUtil.decrypt(noteToUpdate.getTitle()));
+        response.setContent(EncryptionUtil.decrypt(noteToUpdate.getContent()));
+
+        return Optional.of(response);
+    }
+
+    @Transactional
     public boolean deleteNoteByTitleAndUserId(String title, String userId) {
         if (title == null || title.isBlank()) return false;
         Optional<Note> existing = noteDao.findByTitleIgnoreCaseAndUserId(title, userId);
