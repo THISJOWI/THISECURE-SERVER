@@ -19,7 +19,7 @@ import java.util.Map;
 @EnableKafka
 public class KafkaConfig {
 
-    @Value("${kafka.bootstrap-servers}")
+    @Value("${kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
 
     @Value("${kafka.consumer.group-id:otp-service-group}")
