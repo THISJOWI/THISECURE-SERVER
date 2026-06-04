@@ -13,3 +13,6 @@ CREATE INDEX IF NOT EXISTS idx_password_user_id ON password(user_id);
 
 -- changeset password:3 runOnChange:false
 CREATE INDEX IF NOT EXISTS idx_password_user_id_name_website ON password(user_id, name, website);
+
+-- changeset password:4 runOnChange:false
+ALTER TABLE password ALTER COLUMN user_id TYPE TEXT;

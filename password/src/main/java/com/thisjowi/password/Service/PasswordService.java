@@ -42,8 +42,8 @@ public class PasswordService {
 
     @Transactional
     public Password savePasswordForTokenWithDeduplication(String authHeader, Password passwordData) {
-        Long userId = extractUserIdFromToken(authHeader);
-        if (userId == null || userId == -1L) {
+        String userId = extractUserIdFromToken(authHeader);
+        if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("Invalid or expired token");
         }
 
@@ -76,8 +76,8 @@ public class PasswordService {
     }
 
     public List<Password> getPasswordsByToken(String authHeader) {
-        Long userId = extractUserIdFromToken(authHeader);
-        if (userId == null) {
+        String userId = extractUserIdFromToken(authHeader);
+        if (userId == null || userId.isBlank()) {
             log.warn("Failed to extract userId from Authorization header");
             return Collections.emptyList();
         }
@@ -88,8 +88,8 @@ public class PasswordService {
 
     @Transactional
     public Password savePasswordForToken(String authHeader, Password password) {
-        Long userId = extractUserIdFromToken(authHeader);
-        if (userId == null || userId == -1L) {
+        String userId = extractUserIdFromToken(authHeader);
+        if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("Invalid or expired token");
         }
         password.setUserId(userId);
@@ -98,8 +98,8 @@ public class PasswordService {
 
     @Transactional
     public Password updatePasswordByToken(String authHeader, Long id, Password passwordData) {
-        Long userId = extractUserIdFromToken(authHeader);
-        if (userId == null || userId == -1L) {
+        String userId = extractUserIdFromToken(authHeader);
+        if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("Invalid or expired token");
         }
         var opt = passwordDao.findById(id);
@@ -128,8 +128,8 @@ public class PasswordService {
 
     @Transactional
     public void deletePasswordByToken(String authHeader, Long id) {
-        Long userId = extractUserIdFromToken(authHeader);
-        if (userId == null || userId == -1L) {
+        String userId = extractUserIdFromToken(authHeader);
+        if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("Invalid or expired token");
         }
         var opt = passwordDao.findById(id);
@@ -143,7 +143,7 @@ public class PasswordService {
         passwordDao.deleteById(id);
     }
 
-    private Long extractUserIdFromToken(String authHeader) {
+    private String extractUserIdFromToken(String authHeader) {
         log.debug("Extracting userId from Authorization header");
 
         if (authHeader == null || authHeader.isBlank()) {
@@ -152,9 +152,9 @@ public class PasswordService {
         }
 
         String token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : authHeader;
-        Long userId = jwtUtil.extractUserId(token);
+        String userId = jwtUtil.extractUserId(token);
 
-        if (userId != null && userId != -1L) {
+        if (userId != null && !userId.isBlank()) {
             log.info("UserId extracted successfully");
             return userId;
         }
@@ -163,8 +163,8 @@ public class PasswordService {
         return null;
     }
 
-    private List<Password> getPasswordsByUserId(Long userId) {
-        if (userId == null || userId <= 0) {
+    private List<Password> getPasswordsByUserId(String userId) {
+        if (userId == null || userId.isBlank()) {
             log.warn("Invalid userId: {}", userId);
             return Collections.emptyList();
         }

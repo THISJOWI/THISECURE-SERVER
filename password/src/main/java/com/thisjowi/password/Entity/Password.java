@@ -23,6 +23,6 @@ public class Password {
     String website;
 
     @JsonProperty("userId")
-    Long userId;
+    String userId;
 
 }

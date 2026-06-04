@@ -135,7 +135,7 @@ public class PasswordController {
             log.info("POST /passwords: Created or updated password (no duplicates allowed)");
 
             // Publish sync event
-            String userId = String.valueOf(extractUserIdFromToken(authHeader));
+            String userId = extractUserIdFromToken(authHeader);
             syncEventPublisher.publish(userId, "created", Map.of(
                 "id", String.valueOf(saved.getId()),
                 "title", saved.getName(),
@@ -181,7 +181,7 @@ public class PasswordController {
             log.info("PUT /passwords/{}: Password updated", id);
 
             // Publish sync event
-            String userId = String.valueOf(extractUserIdFromToken(authHeader));
+            String userId = extractUserIdFromToken(authHeader);
             syncEventPublisher.publish(userId, "updated", Map.of(
                 "id", String.valueOf(updated.getId()),
                 "title", updated.getName(),
@@ -224,7 +224,7 @@ public class PasswordController {
             log.info("DELETE /passwords/{}: Password deleted", id);
 
             // Publish sync event
-            String userId = String.valueOf(extractUserIdFromToken(authHeader));
+            String userId = extractUserIdFromToken(authHeader);
             syncEventPublisher.publish(userId, "deleted", Map.of(
                 "id", String.valueOf(id)
             ));
@@ -259,8 +259,8 @@ public class PasswordController {
                         .body(Map.of("error", "Authorization header required"));
             }
 
-            Long userId = extractUserIdFromToken(authHeader);
-            if (userId == null || userId == -1L) {
+            String userId = extractUserIdFromToken(authHeader);
+            if (userId == null || userId.isBlank()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(Map.of("error", "Invalid or expired token"));
             }
@@ -289,8 +289,8 @@ public class PasswordController {
                         .body(Map.of("error", "Authorization header required"));
             }
 
-            Long userId = extractUserIdFromToken(authHeader);
-            if (userId == null || userId == -1L) {
+            String userId = extractUserIdFromToken(authHeader);
+            if (userId == null || userId.isBlank()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(Map.of("error", "Invalid or expired token"));
             }
@@ -308,7 +308,7 @@ public class PasswordController {
     /**
      * Extract user ID from JWT token
      */
-    private Long extractUserIdFromToken(String authHeader) {
+    private String extractUserIdFromToken(String authHeader) {
         if (authHeader == null || authHeader.isBlank()) {
             return null;
         }

@@ -17,18 +17,16 @@ public class JwtUtil {
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    public Long extractUserId(String token) {
+    public String extractUserId(String token) {
         if (token == null || token.isBlank()) return null;
         String jwt = token.startsWith("Bearer ") ? token.substring(7) : token;
         try {
-            // Extract userId from the subject (set by Authentication service)
-            String subject = Jwts.parser()
+            return Jwts.parser()
                     .verifyWith(key)
                     .build()
                     .parseSignedClaims(jwt)
                     .getPayload()
                     .getSubject();
-            return Long.parseLong(subject);
         } catch (Exception e) {
             return null;
         }

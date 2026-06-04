@@ -23,7 +23,7 @@ public class JdbcPasswordDao implements PasswordDao {
         p.setPassword(rs.getString("password"));
         p.setName(rs.getString("name"));
         p.setWebsite(rs.getString("website"));
-        p.setUserId(rs.getLong("user_id"));
+        p.setUserId(rs.getString("user_id"));
         return p;
     };
 
@@ -32,7 +32,7 @@ public class JdbcPasswordDao implements PasswordDao {
     }
 
     @Override
-    public List<Password> findByUserId(Long userId) {
+    public List<Password> findByUserId(String userId) {
         return jdbcTemplate.query("SELECT * FROM password WHERE user_id = ?", rowMapper, userId);
     }
 
@@ -43,7 +43,7 @@ public class JdbcPasswordDao implements PasswordDao {
     }
 
     @Override
-    public Optional<Password> findByUserIdAndNameAndWebsite(Long userId, String name, String website) {
+    public Optional<Password> findByUserIdAndNameAndWebsite(String userId, String name, String website) {
         return jdbcTemplate.query(
                 "SELECT * FROM password WHERE user_id = ? AND name = ? AND website = ?",
                 rowMapper, userId, name, website).stream().findFirst();
@@ -59,7 +59,7 @@ public class JdbcPasswordDao implements PasswordDao {
             ps.setString(1, password.getPassword());
             ps.setString(2, password.getName());
             ps.setString(3, password.getWebsite());
-            ps.setLong(4, password.getUserId());
+            ps.setString(4, password.getUserId());
             return ps;
         }, keyHolder);
 

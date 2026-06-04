@@ -17,7 +17,7 @@ public class PasswordDeduplicationService {
         this.passwordDao = passwordDao;
     }
 
-    public Map<String, Object> analyzeDuplicates(Long userId) {
+    public Map<String, Object> analyzeDuplicates(String userId) {
         List<Password> allPasswords = passwordDao.findByUserId(userId);
 
         Map<String, List<Password>> groups = allPasswords.stream()
@@ -51,7 +51,7 @@ public class PasswordDeduplicationService {
     }
 
     @Transactional
-    public Map<String, Object> removeDuplicates(Long userId) {
+    public Map<String, Object> removeDuplicates(String userId) {
         List<Password> allPasswords = passwordDao.findByUserId(userId);
 
         Map<String, List<Password>> groups = allPasswords.stream()
