@@ -248,6 +248,40 @@ public class PasswordController {
     }
 
     /**
+     * Import passwords in batch
+     * Accepts a JSON array of password objects, deduplicates by title+website
+     */
+    @PostMapping("/import")
+    public ResponseEntity<?> importPasswords(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
+            @RequestBody List<PasswordDTO> passwordDTOs) {
+        try {
+            if (authHeader == null || authHeader.isBlank()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Authorization header required"));
+            }
+
+            if (passwordDTOs == null || passwordDTOs.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Request body must be a non-empty array of passwords"));
+            }
+
+            Map<String, Object> result = passwordService.importPasswords(authHeader, passwordDTOs);
+            log.info("POST /passwords/import: {} passwords processed (imported={}, skipped={}, errors={})",
+                    result.get("total"), result.get("imported"), result.get("skipped"), result.get("errors"));
+
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("POST /passwords/import: Unexpected error", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Internal server error"));
+        }
+    }
+
+    /**
      * Analyze duplicates for the authenticated user
      * Returns information about duplicate passwords found
      */

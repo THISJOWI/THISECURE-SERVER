@@ -96,6 +96,26 @@ public class NotesController {
         return ResponseEntity.ok(notes);
     }
 
+    @PostMapping("/import")
+    public ResponseEntity<?> importNotes(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
+            @RequestBody List<NoteDTO> noteDTOs) {
+        String userId = extractUserIdFromToken(authHeader);
+        if (userId == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authorization required"));
+        }
+
+        if (noteDTOs == null || noteDTOs.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Request body must be a non-empty array of notes"));
+        }
+
+        Map<String, Object> result = notesService.importNotes(userId, noteDTOs);
+        log.info("POST /notes/import: {} notes processed (imported={}, skipped={}, errors={})",
+                result.get("total"), result.get("imported"), result.get("skipped"), result.get("errors"));
+
+        return ResponseEntity.ok(result);
+    }
+
     @GetMapping("/search")
     public ResponseEntity<List<Note>> searchNotes(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,

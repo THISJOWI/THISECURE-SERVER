@@ -6,11 +6,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.thisjowi.note.Utils.EncryptionUtil;
+import com.thisjowi.note.dto.NoteDTO;
 import com.thisjowi.note.entity.Note;
 import com.thisjowi.note.repository.NoteDao;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -281,6 +283,60 @@ public class NoteService {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Batch import notes for a user.
+     * Returns stats: imported count, skipped count (duplicates), and errors.
+     */
+    @Transactional
+    public Map<String, Object> importNotes(String userId, List<NoteDTO> noteDTOList) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("Invalid userId");
+        }
+
+        int imported = 0;
+        int skipped = 0;
+        int errors = 0;
+
+        for (NoteDTO dto : noteDTOList) {
+            try {
+                if (dto.getTitle() == null || dto.getTitle().isBlank()) {
+                    errors++;
+                    continue;
+                }
+
+                Note note = dto.toEntity();
+                note.setUserId(userId);
+
+                Optional<Note> existingOptional = noteDao.findByTitleIgnoreCaseAndUserId(
+                    dto.getTitle().trim(), userId);
+
+                if (existingOptional.isPresent()) {
+                    Note existing = existingOptional.get();
+                    if (dto.getContent() != null) {
+                        existing.setTitle(EncryptionUtil.encrypt(dto.getTitle().trim()));
+                        existing.setContent(EncryptionUtil.encrypt(dto.getContent()));
+                        existing.setUserId(userId);
+                        noteDao.update(existing);
+                    }
+                    skipped++;
+                } else {
+                    saveNote(note);
+                    imported++;
+                }
+            } catch (Exception e) {
+                logger.error("Failed to import note '{}': {}", dto.getTitle(), e.getMessage());
+                errors++;
+            }
+        }
+
+        return Map.of(
+            "imported", imported,
+            "skipped", skipped,
+            "errors", errors,
+            "total", noteDTOList.size()
+        );
     }
 
     private Note decryptNote(Note note) {

@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.thisjowi.password.Entity.Password;
+import com.thisjowi.password.Entity.PasswordDTO;
 import com.thisjowi.password.Repository.PasswordDao;
 import com.thisjowi.password.Utils.Encryption;
 import com.thisjowi.password.Utils.JwtUtil;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @AllArgsConstructor
@@ -239,6 +241,63 @@ public class PasswordService {
                 log.error("Failed to decrypt username field for id {}: {}", p.getId(), e.getMessage());
             }
         }
+    }
+
+    /**
+     * Batch import passwords for a user.
+     * Returns stats: imported count, skipped count (duplicates), and errors.
+     */
+    @Transactional
+    public Map<String, Object> importPasswords(String authHeader, List<PasswordDTO> passwordDTOList) {
+        String userId = extractUserIdFromToken(authHeader);
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("Invalid or expired token");
+        }
+
+        int imported = 0;
+        int skipped = 0;
+        int errors = 0;
+
+        for (PasswordDTO dto : passwordDTOList) {
+            try {
+                Password password = dto.toEntity();
+                password.setUserId(userId);
+
+                // Deduplicate by name+website
+                String nameToCheck = password.getName() != null ? password.getName().trim() : "";
+                String websiteToCheck = password.getWebsite() != null ? password.getWebsite().trim() : "";
+                String encryptedName = nameToCheck.isEmpty() ? "" : encryption.encrypt(nameToCheck);
+                String encryptedWebsite = websiteToCheck.isEmpty() ? "" : encryption.encrypt(websiteToCheck);
+
+                var existingOptional = passwordDao.findByUserIdAndNameAndWebsite(
+                    userId, encryptedName, encryptedWebsite);
+
+                if (existingOptional.isPresent()) {
+                    Password existing = existingOptional.get();
+                    if (password.getPassword() != null && !password.getPassword().isEmpty()) {
+                        existing.setPassword(encryption.encrypt(password.getPassword()));
+                    }
+                    if (password.getUsername() != null && !password.getUsername().isEmpty()) {
+                        existing.setUsername(encryption.encrypt(password.getUsername()));
+                    }
+                    passwordDao.update(existing);
+                    skipped++;
+                } else {
+                    savePassword(password);
+                    imported++;
+                }
+            } catch (Exception e) {
+                log.error("Failed to import password '{}': {}", dto.getName(), e.getMessage());
+                errors++;
+            }
+        }
+
+        return Map.of(
+            "imported", imported,
+            "skipped", skipped,
+            "errors", errors,
+            "total", passwordDTOList.size()
+        );
     }
 
     @Transactional
