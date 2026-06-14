@@ -246,9 +246,10 @@ jobs:
         id: buildx
         uses: docker/build-push-action@v6
         with:
-          context: services/${{ matrix.service }}
+          context: .
+          file: services/${{ matrix.service }}/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ needs.changes.outputs.branch == 'develop' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.revision=${{ needs.changes.outputs.sha }}
