@@ -24,7 +24,7 @@ func Load() Config {
 	dbPort := getEnv("DB_PORT", "5432")
 	dbUser := getEnv("DB_USERNAME", "postgres")
 	dbPass := getEnv("DB_PASSWORD", "postgres")
-	cfg.DatabaseURL = fmt.Sprintf("postgres://%s:%s@%s:%s/password?sslmode=disable", dbUser, dbPass, dbHost, dbPort)
+	cfg.DatabaseURL = fmt.Sprintf("postgres://%s:%s@%s:%s/passwords?sslmode=disable", dbUser, dbPass, dbHost, dbPort)
 
 	kafkaHost := getEnv("KAFKA_HOST", "localhost")
 	kafkaPort := getEnv("KAFKA_PORT", "9092")
