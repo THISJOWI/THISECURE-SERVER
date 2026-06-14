@@ -6,9 +6,7 @@
 
 **Modern and Secure Microservices Backend**
 
-[![Java 21](https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.x-6DB33F?style=flat-square&logo=spring)](https://spring.io/)
-[![NestJS](https://img.shields.io/badge/NestJS-10.x-E0234E?style=flat-square&logo=nestjs)](https://nestjs.com/)
+[![Go](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go)](https://go.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-Proprietary-red?style=flat-square)](./LICENCE.md)
 
@@ -16,67 +14,57 @@
 
 ---
 
-## 📖 Overview
+## Overview
 
 THISJOWI Server is a scalable, microservice-oriented backend designed to power the THISJOWI ecosystem. It provides robust authentication, secure communication, and encrypted data storage with a focus on privacy and performance.
 
-## 📦 Core Services
+## Core Services
 
-| Service | Technology | Description |
+| Service | Language | Description |
 |:--- |:--- |:--- |
-| 🔐 **Auth** | Spring Boot | Identity management, JWT, OAuth2, and multi-tenant LDAP support. |
-| 📝 **Note** | Spring Boot | Encrypted note management with tagging and versioning. |
-| 💬 **Messages** | NestJS | Real-time messaging hub with WebSocket support. |
-| 🔑 **Password** | Spring Boot | Secure credential vault for password management. |
-| 🔔 **OTP** | Spring Boot | One-Time Password generation and verification engine. |
-| ⚙️ **Config** | Spring Boot | Centralized configuration management for all services. |
+| **Note** | Go | Encrypted note management with tagging and versioning. |
+| **Password** | Go | Secure credential vault for password management. |
+| **OTP** | Go | One-Time Password generation and verification engine. |
 
-## 🛠 Tech Stack
+## Tech Stack
 
-- **Languages:** Java 21, TypeScript
-- **Frameworks:** Spring Boot 3.x, NestJS 10.x, Spring Cloud
-- **Databases:** PostgreSQL, Redis, Kafka, Cassandra
-- **Infrastructure:** Docker, Kubernetes (K8s), Spring Cloud Config
+- **Language:** Go 1.25
+- **Database:** CockroachDB (PostgreSQL-compatible)
+- **Messaging:** Kafka
+- **Infrastructure:** Docker
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Prerequisites
-- Java 21+ & Node.js 18+
+- Go 1.25+
 - Docker & Docker Compose
-- Gradle 8.x
 
 ### 2. Infrastructure
-Spin up the necessary databases and middleware:
 ```bash
-# Using the provided helper script
-./infrastructure/scripts/init.sh
+docker compose up -d
 ```
 
-### 3. Running Services
-Each service is independent. To run the **Auth Service**:
+### 3. Run all services
 ```bash
-cd auth
-./gradlew bootRun
-```
-For the **Messages Service**:
-```bash
-cd messages
-npm install && npm run start:dev
+make dev
 ```
 
-## ☸️ Containerization & Orchestration
+Or run individually:
+```bash
+go run ./services/note/cmd/server/
+go run ./services/otp/cmd/server/
+go run ./services/password/cmd/server/
+```
 
-The project is ready for cloud deployment using Docker and Kubernetes.
+## Containerization
 
-- **Docker:** Each service contains its own `Dockerfile` and `compose.yaml`.
-- **Kubernetes:** Manifests are located in `infrastructure/k8s/` for scalable deployments.
+Each service contains its own `Dockerfile`. Multi-arch images (`linux/amd64`, `linux/arm64`) are built and pushed to Docker Hub via CI.
 
-## � Security & Privacy
+## Security & Privacy
 
 - **E2EE Ready:** Designed to support end-to-end encryption.
 - **Data Security:** AES-256 encryption for sensitive data at rest.
 - **Access Control:** Fine-grained JWT-based authorization.
-- **Isolated Config:** Centralized secrets and configuration management.
 
 ---
 

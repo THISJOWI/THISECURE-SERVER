@@ -32,14 +32,14 @@ jobs:
       - id: build-matrix
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo 'matrix=["note","password","otp","messages"]' >> $GITHUB_OUTPUT
+            echo 'matrix=["note","password","otp"]' >> $GITHUB_OUTPUT
           else
             if [ "${{ github.event_name }}" = "pull_request" ]; then
               BASE="${{ github.event.pull_request.base.sha }}"
             else
               BASE="${{ github.event.before }}"
             fi
-            CHANGED=$(git diff --name-only "${BASE}" HEAD | cut -d/ -f1 | sort -u | grep -E '^(note|password|otp|messages)$' | jq -R -s -c 'split("\n")[:-1]')
+            CHANGED=$(git diff --name-only "${BASE}" HEAD | cut -d/ -f2 | sort -u | grep -E '^(note|password|otp)$' | jq -R -s -c 'split("\n")[:-1]')
             echo "matrix=${CHANGED:-[]}" >> $GITHUB_OUTPUT
           fi
 
@@ -63,7 +63,7 @@ jobs:
         continue-on-error: true
         uses: hadolint/hadolint-action@v3.3.0
         with:
-          dockerfile: ${{ matrix.service }}/Dockerfile
+          dockerfile: services/${{ matrix.service }}/Dockerfile
 
       - name: Trivy — filesystem scan (CRITICAL+HIGH)
         id: trivy-fs
@@ -71,7 +71,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
-          scan-ref: ${{ matrix.service }}
+          scan-ref: services/${{ matrix.service }}
           format: json
           output: ${{ matrix.service }}-trivy-fs.json
           severity: CRITICAL,HIGH
@@ -82,7 +82,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: config
-          scan-ref: ${{ matrix.service }}
+          scan-ref: services/${{ matrix.service }}
           format: json
           output: ${{ matrix.service }}-trivy-config.json
 
@@ -92,7 +92,7 @@ jobs:
         run: |
           curl -sL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz -C /usr/local/bin/ gitleaks
           gitleaks detect \
-            --source="${{ matrix.service }}" \
+            --source="services/${{ matrix.service }}" \
             --report-format=json \
             --report-path="${{ matrix.service }}-gitleaks.json" \
             --config=".gitleaks.toml" \
@@ -199,29 +199,17 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.service == 'messages' && 'javascript-typescript' || 'java' }}
+          languages: go
           queries: security-and-quality
 
-      - name: Set up JDK 21
-        if: ${{ matrix.service != 'messages' }}
-        uses: actions/setup-java@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        if: ${{ matrix.service != 'messages' }}
-        uses: gradle/actions/setup-gradle@v4
+          go-version: '1.25'
 
       - name: Build ${{ matrix.service }}
-        if: ${{ matrix.service != 'messages' }}
-        run: ./gradlew compileJava --no-daemon
-        working-directory: ${{ matrix.service }}
-
-      - name: Install dependencies
-        if: ${{ matrix.service == 'messages' }}
-        run: npm ci
-        working-directory: ${{ matrix.service }}
+        run: go build ./...
+        working-directory: services/${{ matrix.service }}
 
       - name: CodeQL Analyze
         uses: github/codeql-action/analyze@v3
@@ -258,7 +246,7 @@ jobs:
         id: buildx
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.service }}
+          context: services/${{ matrix.service }}
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.tags.outputs.tags }}

@@ -2,54 +2,60 @@
 
 ## Architecture
 
-- **4 independent services** in the repo root: `note`, `otp`, `password` (Spring Boot 3.5.9 / Java 21 / Gradle), `messages` (NestJS 10 / TypeScript / Cassandra)
-- Each Java service is a standalone Gradle project with its own `gradlew`, `settings.gradle.kts`, `build.gradle.kts`. There is no root-level build tool or wrapper.
-- README mentions `auth`, `config` services and `infrastructure/` directory — **none of these exist yet**. CONTRIBUTING.md references `./mvnw` — ignore; services use Gradle exclusively.
+- **3 independent Go services** in `services/`: `note`, `otp`, `password` (Go 1.25)
+- **Shared library** in `pkg/` (`crypto`, `database`, `jwt`, `kafka`, `middleware`, `models`)
+- **Go workspace** (`go.work`) ties root `pkg/` with all services
+- Each service has its own `go.mod`, `cmd/server/`, `internal/`, `Dockerfile`, `migrations/`
+- **No messages service** — removed
 
 ## Commands
 
-### Java services (note, otp, password)
-```
-./gradlew bootRun          # run locally
-./gradlew test             # run tests
-./gradlew compileJava      # compile only (CI does this)
-./gradlew clean build      # full build
-```
-Run from inside the service directory (each has its own `gradlew`).
+All commands run from repo root (use Go workspace):
 
-### Messages (NestJS)
 ```
-npm ci                     # clean install
-npm run build              # compile TypeScript
-npm test                   # unit tests (Jest)
-npm run test:e2e           # e2e tests
+go build ./...              # build all
+go test ./...               # test all
+go vet ./...                # vet all
+```
+
+Or use `Makefile`:
+
+```
+make build                  # build all services
+make test                   # test all
+make vet                    # vet all
+make dev                    # show dev run commands
+```
+
+Per service:
+
+```
+go run ./services/note/cmd/server/
+go run ./services/otp/cmd/server/
+go run ./services/password/cmd/server/
 ```
 
 ## CI/CD
 
 - CI runs on **every push and PR** (`.github/workflows/main.yaml`)
-- **Feature branches**: security scans only (Hadolint, Trivy Gitleaks, CodeQL) + compile/CodeQL analyze
+- **Feature branches**: security scans only (Hadolint, Trivy, Gitleaks, CodeQL) + compile
 - **`master` / `develop`**: also build + push multi-arch Docker images (`linux/amd64,linux/arm64`) to Docker Hub as `thisjowi/<service>:*`
-- Service detection is **path-based** — only changed services are built. Manual dispatch builds all 4.
+- Service detection is **path-based** (`services/*`) — only changed services are built. Manual dispatch builds all 3.
 - Security scans use `continue-on-error: true` — they produce reports/issues but don't block the pipeline.
 
 ## Conventions
 
-- **Java package**: `com.thisjowi.<service>` (e.g. `com.thisjowi.note`)
+- **Go module**: `github.com/thisuite/thisecure/<service>` (e.g. `github.com/thisuite/thisecure/note`)
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`, `perf:`)
 - **Branch names**: `feature/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/` prefixes
-- **Casing inconsistency**: `password` uses PascalCase package dirs (`Config/`, `Controller/`, `Service/`); `note` and `otp` use lowercase (`config/`, `controller/`, `service/`). Follow the convention per service.
 
 ## Infrastructure
 
-- Each Java service connects to `http://config.core:8888` via Spring Cloud Config (`bootstrap.yaml`)
-- **Database**: PostgreSQL (CockroachDB) for Java services, Cassandra for `messages`
-- **Messaging**: Kafka for inter-service events (Spring Cloud Bus + Kafka)
-- **Migrations**: Liquibase for Java services
-- `messages` has `compose.yaml`, `password` and `otp` have `compose.yaml`; `note` does **not** have a compose file.
+- **Database**: CockroachDB (PostgreSQL-compatible) for all services
+- **Messaging**: Kafka for inter-service events
+- **Migrations**: Each service has its own `migrations/` directory
 
 ## Security
 
 - All pushes trigger Gitleaks secrets scanning (config at repo root: `.gitleaks.toml`)
-- `SECURITY_AUDIT.md` documents 34 known vulnerabilities (13 CRITICAL, 12 HIGH, 9 MEDIUM) as of 2026-06-03 — focused on `otp`, `password`, `note` services
 - CI security scans are non-blocking (`continue-on-error: true`); failures create GitHub issues with `security` and `registry` labels
