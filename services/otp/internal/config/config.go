@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 type Config struct {
 	Port          string
@@ -11,13 +14,23 @@ type Config struct {
 }
 
 func Load() Config {
-	return Config{
+	cfg := Config{
 		Port:          getEnv("PORT", "8085"),
-		DatabaseURL:   getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5434/otp?sslmode=disable"),
 		JWTSecret:     getEnv("JWT_SECRET", ""),
 		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
-		KafkaBrokers:  []string{getEnv("KAFKA_BROKERS", "localhost:9092")},
 	}
+
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "5432")
+	dbUser := getEnv("DB_USERNAME", "postgres")
+	dbPass := getEnv("DB_PASSWORD", "postgres")
+	cfg.DatabaseURL = fmt.Sprintf("postgres://%s:%s@%s:%s/otp?sslmode=disable", dbUser, dbPass, dbHost, dbPort)
+
+	kafkaHost := getEnv("KAFKA_HOST", "localhost")
+	kafkaPort := getEnv("KAFKA_PORT", "9092")
+	cfg.KafkaBrokers = []string{fmt.Sprintf("%s:%s", kafkaHost, kafkaPort)}
+
+	return cfg
 }
 
 func getEnv(key, fallback string) string {
