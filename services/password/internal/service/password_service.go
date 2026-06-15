@@ -132,32 +132,22 @@ func (s *PasswordService) Import(ctx context.Context, reqs []model.PasswordReque
 }
 
 func (s *PasswordService) encrypt(pw *model.Password) {
-	if s.encKey == nil {
+	if s.encKey == nil || pw.Password == "" {
 		return
 	}
-	fields := []*string{&pw.Password, &pw.Name, &pw.Website, &pw.Username}
-	for _, f := range fields {
-		if *f != "" {
-			enc, err := crypto.Encrypt([]byte(*f), s.encKey)
-			if err == nil {
-				*f = enc
-			}
-		}
+	enc, err := crypto.Encrypt([]byte(pw.Password), s.encKey)
+	if err == nil {
+		pw.Password = enc
 	}
 }
 
 func (s *PasswordService) decrypt(pw *model.Password) {
-	if s.encKey == nil {
+	if s.encKey == nil || pw.Password == "" {
 		return
 	}
-	fields := []*string{&pw.Password, &pw.Name, &pw.Website, &pw.Username}
-	for _, f := range fields {
-		if *f != "" {
-			dec, err := crypto.Decrypt(*f, s.encKey)
-			if err == nil {
-				*f = string(dec)
-			}
-		}
+	dec, err := crypto.Decrypt(pw.Password, s.encKey)
+	if err == nil {
+		pw.Password = string(dec)
 	}
 }
 

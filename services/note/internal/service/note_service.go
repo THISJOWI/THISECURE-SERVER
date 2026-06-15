@@ -73,6 +73,11 @@ func (s *NoteService) SearchByTitle(ctx context.Context, title, userID string) (
 }
 
 func (s *NoteService) Create(ctx context.Context, req model.NoteRequest, userID string) (*model.Note, error) {
+	existing, err := s.repo.FindByTitleAndUser(ctx, req.Title, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	note := &model.Note{
 		Title:     req.Title,
 		Content:   req.Content,
@@ -80,27 +85,24 @@ func (s *NoteService) Create(ctx context.Context, req model.NoteRequest, userID 
 		CreatedAt: time.Now(),
 		Version:   0,
 	}
-	s.encryptNote(note)
 
-	existing, err := s.repo.FindByTitleAndUser(ctx, note.Title, userID)
-	if err != nil {
-		return nil, err
-	}
 	if existing != nil {
 		note.ID = existing.ID
 		note.Version = existing.Version
+		s.encryptNote(note)
 		if err := s.repo.Update(ctx, note); err != nil {
 			return nil, err
 		}
 	} else {
+		s.encryptNote(note)
 		if err := s.repo.Insert(ctx, note); err != nil {
 			if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
-				existing2, _ := s.repo.FindByTitleAndUser(ctx, note.Title, userID)
+				existing2, _ := s.repo.FindByTitleAndUser(ctx, req.Title, userID)
 				if existing2 != nil {
 					note.ID = existing2.ID
 					note.Version = existing2.Version
 					s.repo.Update(ctx, note)
-					s.publishEvent(note, "updated")
+					s.publishEvent(note, "created")
 					return s.GetByID(ctx, note.ID, userID)
 				}
 			}
@@ -168,12 +170,6 @@ func (s *NoteService) encryptNote(n *model.Note) {
 	if s.encKey == nil {
 		return
 	}
-	if n.Title != "" {
-		enc, err := crypto.Encrypt([]byte(n.Title), s.encKey)
-		if err == nil {
-			n.Title = enc
-		}
-	}
 	if n.Content != "" {
 		enc, err := crypto.Encrypt([]byte(n.Content), s.encKey)
 		if err == nil {
@@ -185,12 +181,6 @@ func (s *NoteService) encryptNote(n *model.Note) {
 func (s *NoteService) decryptNote(n *model.Note) {
 	if s.encKey == nil {
 		return
-	}
-	if n.Title != "" {
-		dec, err := crypto.Decrypt(n.Title, s.encKey)
-		if err == nil {
-			n.Title = string(dec)
-		}
 	}
 	if n.Content != "" {
 		dec, err := crypto.Decrypt(n.Content, s.encKey)

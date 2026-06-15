@@ -21,5 +21,5 @@ type CreateOtpRequest struct {
 	Digits    int    `json:"digits"`
 	Period    int    `json:"period"`
 	Algorithm string `json:"algorithm"`
-	Type      string `json:"type"`
+	Type      string `json:"type" binding:"required"`
 }
