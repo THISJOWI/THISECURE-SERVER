@@ -1,0 +1,1 @@
+ALTER TABLE otp DROP CONSTRAINT IF EXISTS uq_otp_user_name;

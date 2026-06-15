@@ -61,9 +61,17 @@ func (s *OtpService) Create(ctx context.Context, req model.CreateOtpRequest, use
 		secret = generateRandomSecret()
 	}
 
+	existing, err := s.repo.FindByUserIDAndEmail(ctx, userID, req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("otp with this name already exists")
+	}
+
 	o := &model.Otp{
 		UserID:    userID,
-		Email:     "",
+		Email:     req.Name,
 		Secret:    secret,
 		ExpiresAt: expiresAt,
 		Type:      req.Type,

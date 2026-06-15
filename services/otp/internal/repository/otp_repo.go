@@ -70,6 +70,22 @@ func (r *OtpRepo) Update(ctx context.Context, o *model.Otp) error {
 	return nil
 }
 
+func (r *OtpRepo) FindByUserIDAndEmail(ctx context.Context, userID, email string) (*model.Otp, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, user_id, email, secret, expires_at, type, issuer, digits, period, algorithm, valid FROM otp WHERE user_id = $1 AND email = $2`, userID, email)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+	otp, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[model.Otp])
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("collect: %w", err)
+	}
+	return &otp, nil
+}
+
 func (r *OtpRepo) Remove(ctx context.Context, id int64, userID string) error {
 	tag, err := r.pool.Exec(ctx, `DELETE FROM otp WHERE id = $1 AND user_id = $2`, id, userID)
 	if err != nil {
