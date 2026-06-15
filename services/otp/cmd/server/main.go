@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"os"
@@ -31,7 +32,10 @@ func main() {
 	if cfg.EncryptionKey == "" {
 		log.Fatal("ENCRYPTION_KEY must be set")
 	}
-	encKey := []byte(cfg.EncryptionKey)
+	encKey, err := hex.DecodeString(cfg.EncryptionKey)
+	if err != nil {
+		log.Fatalf("ENCRYPTION_KEY: invalid hex: %v", err)
+	}
 	if err := crypto.ValidateKey(encKey); err != nil {
 		log.Fatalf("ENCRYPTION_KEY: %v", err)
 	}
