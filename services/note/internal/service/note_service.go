@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
 	"strings"
 	"time"
@@ -15,6 +15,8 @@ import (
 	"github.com/thisuite/thisecure/pkg/kafka"
 	"github.com/thisuite/thisecure/pkg/models"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type NoteService struct {
 	repo       *repository.NoteRepo
@@ -121,7 +123,7 @@ func (s *NoteService) Update(ctx context.Context, id int64, req model.NoteReques
 		return nil, err
 	}
 	if existing == nil || existing.UserID != userID {
-		return nil, fmt.Errorf("note not found or not owned")
+		return nil, ErrNotFound
 	}
 	existing.Title = req.Title
 	existing.Content = req.Content
@@ -140,7 +142,7 @@ func (s *NoteService) Delete(ctx context.Context, id int64, userID string) error
 		return err
 	}
 	if existing == nil || existing.UserID != userID {
-		return fmt.Errorf("note not found or not owned")
+		return ErrNotFound
 	}
 	if err := s.repo.Delete(ctx, id, userID); err != nil {
 		return err
@@ -167,26 +169,30 @@ func (s *NoteService) Import(ctx context.Context, notes []model.NoteRequest, use
 }
 
 func (s *NoteService) encryptNote(n *model.Note) {
-	if s.encKey == nil {
+	if len(s.encKey) == 0 {
 		return
 	}
 	if n.Content != "" {
 		enc, err := crypto.Encrypt([]byte(n.Content), s.encKey)
-		if err == nil {
-			n.Content = enc
+		if err != nil {
+			log.Printf("ERROR: encrypt note content: %v", err)
+			return
 		}
+		n.Content = enc
 	}
 }
 
 func (s *NoteService) decryptNote(n *model.Note) {
-	if s.encKey == nil {
+	if len(s.encKey) == 0 {
 		return
 	}
 	if n.Content != "" {
 		dec, err := crypto.Decrypt(n.Content, s.encKey)
-		if err == nil {
-			n.Content = string(dec)
+		if err != nil {
+			log.Printf("ERROR: decrypt note content: %v", err)
+			return
 		}
+		n.Content = string(dec)
 	}
 }
 

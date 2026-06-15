@@ -50,6 +50,9 @@ func Decrypt(encoded string, key []byte) ([]byte, error) {
 }
 
 func ValidateKey(key []byte) error {
+	if len(key) == 0 {
+		return errors.New("key must not be empty")
+	}
 	switch len(key) {
 	case 16, 24, 32:
 		return nil

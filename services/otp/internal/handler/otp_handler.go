@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thisuite/thisecure/otp/internal/model"
@@ -29,6 +30,14 @@ func (h *OtpHandler) Register(r *gin.RouterGroup) {
 	r.POST("/:id/validate", h.Validate)
 }
 
+func (h *OtpHandler) error(c *gin.Context, status int, err error) {
+	if strings.Contains(err.Error(), "not found") {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(status, gin.H{"error": "internal server error"})
+}
+
 func (h *OtpHandler) DecodeQR(c *gin.Context) {
 	var req struct {
 		Image string `json:"image" binding:"required"`
@@ -39,7 +48,7 @@ func (h *OtpHandler) DecodeQR(c *gin.Context) {
 	}
 	uri, err := h.qr.DecodeQR(req.Image)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid image"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"uri": uri})
@@ -49,7 +58,7 @@ func (h *OtpHandler) GetAll(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	otps, err := h.svc.GetAll(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	if otps == nil {
@@ -67,11 +76,11 @@ func (h *OtpHandler) GetByID(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	o, err := h.svc.GetByID(c.Request.Context(), id, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	if o == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "otp not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
 	c.JSON(http.StatusOK, o)
@@ -86,7 +95,7 @@ func (h *OtpHandler) Create(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	o, err := h.svc.Create(c.Request.Context(), req, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, o)
@@ -106,7 +115,7 @@ func (h *OtpHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	o, err := h.svc.Update(c.Request.Context(), id, req, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, o)
@@ -120,7 +129,7 @@ func (h *OtpHandler) Delete(c *gin.Context) {
 	}
 	userID := middleware.GetUserID(c)
 	if err := h.svc.Delete(c.Request.Context(), id, userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
@@ -137,7 +146,8 @@ func (h *OtpHandler) Validate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
 		return
 	}
-	valid, err := h.svc.Validate(c.Request.Context(), id, code)
+	userID := middleware.GetUserID(c)
+	valid, err := h.svc.Validate(c.Request.Context(), id, userID, code)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

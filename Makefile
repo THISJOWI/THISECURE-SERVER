@@ -21,7 +21,10 @@ test-integration:
 test-all: test test-integration
 
 vet:
-	go vet ./pkg/... ./services/...
+	go vet ./pkg/...
+	@for svc in $(SERVICES); do \
+		cd services/$$svc && go vet ./... && cd ../..; \
+	done
 
 clean:
 	@for svc in $(SERVICES); do \

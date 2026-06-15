@@ -23,6 +23,13 @@ func main() {
 	cfg := config.Load()
 	ctx := context.Background()
 
+	if cfg.JWTSecret == "" || len(cfg.JWTSecret) < 32 {
+		log.Fatal("JWT_SECRET must be set and at least 32 characters")
+	}
+	if cfg.EncryptionKey == "" || len(cfg.EncryptionKey) != 64 {
+		log.Fatal("ENCRYPTION_KEY must be set and exactly 32 bytes (64 hex characters)")
+	}
+
 	pool, err := database.NewPool(ctx, database.DefaultConfig(cfg.DatabaseURL))
 	if err != nil {
 		log.Fatalf("database: %v", err)
@@ -31,8 +38,12 @@ func main() {
 
 	encKey := []byte(cfg.EncryptionKey)
 	jwtSecret := []byte(cfg.JWTSecret)
+	signingKey := []byte(cfg.KafkaSigningKey)
+	if len(signingKey) == 0 {
+		signingKey = jwtSecret
+	}
 
-	signer := kafka.NewSigner(jwtSecret)
+	signer := kafka.NewSigner(signingKey)
 	syncProducer := kafka.NewProducer(cfg.KafkaBrokers, "sync-events", signer)
 	defer syncProducer.Close()
 

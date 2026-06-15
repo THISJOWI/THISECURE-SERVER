@@ -6,18 +6,20 @@ import (
 )
 
 type Config struct {
-	Port          string
-	DatabaseURL   string
-	JWTSecret     string
-	EncryptionKey string
-	KafkaBrokers  []string
+	Port            string
+	DatabaseURL     string
+	JWTSecret       string
+	EncryptionKey   string
+	KafkaSigningKey string
+	KafkaBrokers    []string
 }
 
 func Load() Config {
 	cfg := Config{
-		Port:          getEnv("PORT", "8083"),
-		JWTSecret:     getEnv("JWT_SECRET", ""),
-		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
+		Port:            getEnv("PORT", "8083"),
+		JWTSecret:       getEnv("JWT_SECRET", ""),
+		EncryptionKey:   getEnv("ENCRYPTION_KEY", ""),
+		KafkaSigningKey: getEnv("KAFKA_SIGNING_KEY", ""),
 	}
 
 	dbHost := getEnv("DB_HOST", "localhost")

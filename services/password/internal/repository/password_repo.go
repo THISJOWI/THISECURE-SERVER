@@ -2,12 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thisuite/thisecure/password/internal/model"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type PasswordRepo struct {
 	pool *pgxpool.Pool
@@ -78,7 +81,7 @@ func (r *PasswordRepo) Update(ctx context.Context, pw *model.Password) error {
 		return fmt.Errorf("update: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("password not found or not owned by user")
+		return ErrNotFound
 	}
 	return nil
 }
@@ -89,7 +92,7 @@ func (r *PasswordRepo) Delete(ctx context.Context, id int64, userID string) erro
 		return fmt.Errorf("delete: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("password not found or not owned by user")
+		return ErrNotFound
 	}
 	return nil
 }

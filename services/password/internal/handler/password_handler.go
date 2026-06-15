@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thisuite/thisecure/password/internal/model"
@@ -30,11 +31,19 @@ func (h *PasswordHandler) Register(r *gin.RouterGroup) {
 	r.POST("/admin/remove-duplicates", h.RemoveDuplicates)
 }
 
+func (h *PasswordHandler) error(c *gin.Context, status int, err error) {
+	if strings.Contains(err.Error(), "not found") {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(status, gin.H{"error": "internal server error"})
+}
+
 func (h *PasswordHandler) GetAll(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	pws, err := h.svc.GetAll(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	if pws == nil {
@@ -52,11 +61,11 @@ func (h *PasswordHandler) GetByID(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	pw, err := h.svc.GetByID(c.Request.Context(), id, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	if pw == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "password not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
 	c.JSON(http.StatusOK, pw)
@@ -71,7 +80,7 @@ func (h *PasswordHandler) Create(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	pw, err := h.svc.Create(c.Request.Context(), req, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, pw)
@@ -91,7 +100,7 @@ func (h *PasswordHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	pw, err := h.svc.Update(c.Request.Context(), id, req, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, pw)
@@ -105,7 +114,7 @@ func (h *PasswordHandler) Delete(c *gin.Context) {
 	}
 	userID := middleware.GetUserID(c)
 	if err := h.svc.Delete(c.Request.Context(), id, userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
@@ -120,7 +129,7 @@ func (h *PasswordHandler) Import(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	result, err := h.svc.Import(c.Request.Context(), reqs, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -130,7 +139,7 @@ func (h *PasswordHandler) AnalyzeDuplicates(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	analysis, err := h.dedup.AnalyzeDuplicates(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, analysis)
@@ -140,7 +149,7 @@ func (h *PasswordHandler) RemoveDuplicates(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	removed, err := h.dedup.RemoveDuplicates(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"removed": removed})

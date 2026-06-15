@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -16,6 +17,8 @@ import (
 	"github.com/thisuite/thisecure/pkg/kafka"
 	"github.com/thisuite/thisecure/pkg/models"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type OtpService struct {
 	repo       *repository.OtpRepo
@@ -86,7 +89,7 @@ func (s *OtpService) Update(ctx context.Context, id int64, req model.CreateOtpRe
 		return nil, err
 	}
 	if existing == nil || existing.UserID != userID {
-		return nil, fmt.Errorf("otp not found or not owned")
+		return nil, ErrNotFound
 	}
 
 	existing.Email = ""
@@ -113,7 +116,7 @@ func (s *OtpService) Delete(ctx context.Context, id int64, userID string) error 
 		return err
 	}
 	if existing == nil || existing.UserID != userID {
-		return fmt.Errorf("otp not found or not owned")
+		return ErrNotFound
 	}
 	if err := s.repo.Remove(ctx, id, userID); err != nil {
 		return err
@@ -122,12 +125,12 @@ func (s *OtpService) Delete(ctx context.Context, id int64, userID string) error 
 	return nil
 }
 
-func (s *OtpService) Validate(ctx context.Context, id int64, code string) (bool, error) {
+func (s *OtpService) Validate(ctx context.Context, id int64, userID string, code string) (bool, error) {
 	o, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return false, err
 	}
-	if o == nil {
+	if o == nil || o.UserID != userID {
 		return false, fmt.Errorf("otp not found")
 	}
 	if o.Valid != "true" {
@@ -150,23 +153,27 @@ func (s *OtpService) Validate(ctx context.Context, id int64, code string) (bool,
 }
 
 func (s *OtpService) encryptSecret(o *model.Otp) {
-	if s.encKey == nil || o.Secret == "" {
+	if len(s.encKey) == 0 || o.Secret == "" {
 		return
 	}
 	enc, err := crypto.Encrypt([]byte(o.Secret), s.encKey)
-	if err == nil {
-		o.Secret = enc
+	if err != nil {
+		log.Printf("ERROR: encrypt OTP secret: %v", err)
+		return
 	}
+	o.Secret = enc
 }
 
 func (s *OtpService) decryptSecret(o *model.Otp) {
-	if s.encKey == nil || o.Secret == "" {
+	if len(s.encKey) == 0 || o.Secret == "" {
 		return
 	}
 	dec, err := crypto.Decrypt(o.Secret, s.encKey)
-	if err == nil {
-		o.Secret = string(dec)
+	if err != nil {
+		log.Printf("ERROR: decrypt OTP secret: %v", err)
+		return
 	}
+	o.Secret = string(dec)
 }
 
 func (s *OtpService) publishEvents(o *model.Otp, action string) {

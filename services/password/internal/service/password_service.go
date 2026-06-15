@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
 	"strings"
 	"time"
@@ -14,6 +14,8 @@ import (
 	"github.com/thisuite/thisecure/pkg/kafka"
 	"github.com/thisuite/thisecure/pkg/models"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type PasswordService struct {
 	repo       *repository.PasswordRepo
@@ -84,7 +86,7 @@ func (s *PasswordService) Update(ctx context.Context, id int64, req model.Passwo
 		return nil, err
 	}
 	if existing == nil || existing.UserID != userID {
-		return nil, fmt.Errorf("password not found or not owned")
+		return nil, ErrNotFound
 	}
 	existing.Password = req.Password
 	existing.Name = req.Name
@@ -105,7 +107,7 @@ func (s *PasswordService) Delete(ctx context.Context, id int64, userID string) e
 		return err
 	}
 	if existing == nil || existing.UserID != userID {
-		return fmt.Errorf("password not found or not owned")
+		return ErrNotFound
 	}
 	if err := s.repo.Delete(ctx, id, userID); err != nil {
 		return err
@@ -132,23 +134,27 @@ func (s *PasswordService) Import(ctx context.Context, reqs []model.PasswordReque
 }
 
 func (s *PasswordService) encrypt(pw *model.Password) {
-	if s.encKey == nil || pw.Password == "" {
+	if len(s.encKey) == 0 || pw.Password == "" {
 		return
 	}
 	enc, err := crypto.Encrypt([]byte(pw.Password), s.encKey)
-	if err == nil {
-		pw.Password = enc
+	if err != nil {
+		log.Printf("ERROR: encrypt password: %v", err)
+		return
 	}
+	pw.Password = enc
 }
 
 func (s *PasswordService) decrypt(pw *model.Password) {
-	if s.encKey == nil || pw.Password == "" {
+	if len(s.encKey) == 0 || pw.Password == "" {
 		return
 	}
 	dec, err := crypto.Decrypt(pw.Password, s.encKey)
-	if err == nil {
-		pw.Password = string(dec)
+	if err != nil {
+		log.Printf("ERROR: decrypt password: %v", err)
+		return
 	}
+	pw.Password = string(dec)
 }
 
 func (s *PasswordService) publishEvent(pw *model.Password, action string) {

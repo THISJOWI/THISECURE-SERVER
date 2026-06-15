@@ -2,12 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thisuite/thisecure/otp/internal/model"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type OtpRepo struct {
 	pool *pgxpool.Pool
@@ -62,7 +65,7 @@ func (r *OtpRepo) Update(ctx context.Context, o *model.Otp) error {
 		return fmt.Errorf("update: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("otp not found or not owned by user")
+		return ErrNotFound
 	}
 	return nil
 }
@@ -73,7 +76,7 @@ func (r *OtpRepo) Remove(ctx context.Context, id int64, userID string) error {
 		return fmt.Errorf("delete: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("otp not found or not owned by user")
+		return ErrNotFound
 	}
 	return nil
 }
