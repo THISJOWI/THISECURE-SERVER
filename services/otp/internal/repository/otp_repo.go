@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -48,7 +49,7 @@ func (r *OtpRepo) FindByID(ctx context.Context, id int64) (*model.Otp, error) {
 func (r *OtpRepo) Insert(ctx context.Context, o *model.Otp) error {
 	err := r.pool.QueryRow(ctx,
 		`INSERT INTO otp (user_id, email, secret, expires_at, type, issuer, digits, period, algorithm, valid) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-		o.UserID, o.Email, o.Secret, o.ExpiresAt, o.Type, o.Issuer, o.Digits, o.Period, o.Algorithm, o.Valid,
+		o.UserID, o.Email, o.Secret, o.ExpiresAt, o.Type, o.Issuer, strconv.Itoa(o.Digits), strconv.Itoa(o.Period), o.Algorithm, o.Valid,
 	).Scan(&o.ID)
 	if err != nil {
 		return fmt.Errorf("insert: %w", err)
@@ -59,7 +60,7 @@ func (r *OtpRepo) Insert(ctx context.Context, o *model.Otp) error {
 func (r *OtpRepo) Update(ctx context.Context, o *model.Otp) error {
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE otp SET email=$1, secret=$2, expires_at=$3, type=$4, issuer=$5, digits=$6, period=$7, algorithm=$8, valid=$9 WHERE id=$10 AND user_id=$11`,
-		o.Email, o.Secret, o.ExpiresAt, o.Type, o.Issuer, o.Digits, o.Period, o.Algorithm, o.Valid, o.ID, o.UserID,
+		o.Email, o.Secret, o.ExpiresAt, o.Type, o.Issuer, strconv.Itoa(o.Digits), strconv.Itoa(o.Period), o.Algorithm, o.Valid, o.ID, o.UserID,
 	)
 	if err != nil {
 		return fmt.Errorf("update: %w", err)
