@@ -76,17 +76,40 @@ func (r *PasswordRepo) Insert(ctx context.Context, pw *model.Password) error {
 }
 
 func (r *PasswordRepo) Upsert(ctx context.Context, pw *model.Password) error {
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO password (password, name, website, username, user_id)
-		 VALUES ($1,$2,$3,$4,$5)
-		 ON CONFLICT (user_id, name, website) DO UPDATE SET password=EXCLUDED.password, username=EXCLUDED.username
-		 RETURNING id`,
-		pw.Password, pw.Name, pw.Website, pw.Username, pw.UserID,
-	).Scan(&pw.ID)
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("upsert: %w", err)
+		return fmt.Errorf("upsert begin: %w", err)
 	}
-	return nil
+	defer tx.Rollback(ctx)
+
+	var existingID int64
+	err = tx.QueryRow(ctx,
+		`SELECT id FROM password WHERE user_id = $1 AND name = $2 AND website = $3 FOR UPDATE`,
+		pw.UserID, pw.Name, pw.Website,
+	).Scan(&existingID)
+
+	if err == nil {
+		pw.ID = existingID
+		_, err = tx.Exec(ctx,
+			`UPDATE password SET password=$1, username=$2 WHERE id=$3 AND user_id=$4`,
+			pw.Password, pw.Username, pw.ID, pw.UserID,
+		)
+		if err != nil {
+			return fmt.Errorf("upsert update: %w", err)
+		}
+	} else if errors.Is(err, pgx.ErrNoRows) {
+		err = tx.QueryRow(ctx,
+			`INSERT INTO password (password, name, website, username, user_id) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+			pw.Password, pw.Name, pw.Website, pw.Username, pw.UserID,
+		).Scan(&pw.ID)
+		if err != nil {
+			return fmt.Errorf("upsert insert: %w", err)
+		}
+	} else {
+		return fmt.Errorf("upsert select: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *PasswordRepo) Update(ctx context.Context, pw *model.Password) error {
