@@ -65,7 +65,7 @@ func (s *OtpService) Create(ctx context.Context, req model.CreateOtpRequest, use
 		ExpiresAt: expiresAt,
 		Type:      req.Type,
 		Issuer:    strPtr(req.Issuer),
-		Digits:    strPtr(strconv.Itoa(req.Digits)),
+		Digits:    intPtr(req.Digits),
 		Period:    intPtr(req.Period),
 		Algorithm: strPtr(req.Algorithm),
 		Valid:     "true",
@@ -93,7 +93,7 @@ func (s *OtpService) Update(ctx context.Context, id int64, req model.CreateOtpRe
 	existing.Secret = req.Secret
 	existing.Type = req.Type
 	existing.Issuer = strPtr(req.Issuer)
-	existing.Digits = strPtr(strconv.Itoa(req.Digits))
+	existing.Digits = intPtr(req.Digits)
 	existing.Period = intPtr(req.Period)
 	existing.Algorithm = strPtr(req.Algorithm)
 	existing.ExpiresAt = strconv.FormatInt(time.Now().UnixMilli()+int64(req.Period)*1000, 10)

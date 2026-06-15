@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS otp (
     expires_at TEXT NOT NULL,
     type TEXT NOT NULL,
     issuer TEXT,
-    digits TEXT,
+    digits INTEGER,
     period INTEGER,
     algorithm TEXT,
     valid TEXT NOT NULL

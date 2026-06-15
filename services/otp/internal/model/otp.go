@@ -8,7 +8,7 @@ type Otp struct {
 	ExpiresAt string  `json:"expiresAt" db:"expires_at"`
 	Type      string  `json:"type" db:"type"`
 	Issuer    *string `json:"issuer" db:"issuer"`
-	Digits    *string `json:"digits" db:"digits"`
+	Digits    *int `json:"digits" db:"digits"`
 	Period    *int    `json:"period" db:"period"`
 	Algorithm *string `json:"algorithm" db:"algorithm"`
 	Valid     string  `json:"valid" db:"valid"`
