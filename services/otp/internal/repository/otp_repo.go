@@ -21,7 +21,7 @@ func NewOtpRepo(pool *pgxpool.Pool) *OtpRepo {
 }
 
 func (r *OtpRepo) FindByUserID(ctx context.Context, userID string) ([]model.Otp, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, user_id, email, secret, expires_at, type, issuer, CASE WHEN digits ~ '^\d+$' THEN digits::int ELSE 0 END AS digits, CASE WHEN period ~ '^\d+$' THEN period::int ELSE 0 END AS period, algorithm, valid FROM otp WHERE user_id = $1 ORDER BY id`, userID)
+	rows, err := r.pool.Query(ctx, `SELECT id, user_id, email, secret, expires_at, type, issuer, digits, period, algorithm, valid FROM otp WHERE user_id = $1 ORDER BY id`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -30,7 +30,7 @@ func (r *OtpRepo) FindByUserID(ctx context.Context, userID string) ([]model.Otp,
 }
 
 func (r *OtpRepo) FindByID(ctx context.Context, id int64) (*model.Otp, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, user_id, email, secret, expires_at, type, issuer, CASE WHEN digits ~ '^\d+$' THEN digits::int ELSE 0 END AS digits, CASE WHEN period ~ '^\d+$' THEN period::int ELSE 0 END AS period, algorithm, valid FROM otp WHERE id = $1`, id)
+	rows, err := r.pool.Query(ctx, `SELECT id, user_id, email, secret, expires_at, type, issuer, digits, period, algorithm, valid FROM otp WHERE id = $1`, id)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -71,7 +71,7 @@ func (r *OtpRepo) Update(ctx context.Context, o *model.Otp) error {
 }
 
 func (r *OtpRepo) FindByUserIDAndEmail(ctx context.Context, userID, email string) (*model.Otp, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, user_id, email, secret, expires_at, type, issuer, CASE WHEN digits ~ '^\d+$' THEN digits::int ELSE 0 END AS digits, CASE WHEN period ~ '^\d+$' THEN period::int ELSE 0 END AS period, algorithm, valid FROM otp WHERE user_id = $1 AND email = $2`, userID, email)
+	rows, err := r.pool.Query(ctx, `SELECT id, user_id, email, secret, expires_at, type, issuer, digits, period, algorithm, valid FROM otp WHERE user_id = $1 AND email = $2`, userID, email)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
