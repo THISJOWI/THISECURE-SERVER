@@ -100,7 +100,7 @@ func (h *NoteHandler) GetByTitle(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	note, err := h.svc.GetByTitle(c.Request.Context(), title, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	if note == nil {
@@ -119,7 +119,7 @@ func (h *NoteHandler) GetByID(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	note, err := h.svc.GetByID(c.Request.Context(), id, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.error(c, http.StatusInternalServerError, err)
 		return
 	}
 	if note == nil {

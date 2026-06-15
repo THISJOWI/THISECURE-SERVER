@@ -10,7 +10,10 @@ import (
 	"github.com/thisuite/thisecure/password/internal/model"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound = errors.New("not found")
+	ErrConflict = errors.New("version conflict")
+)
 
 type PasswordRepo struct {
 	pool *pgxpool.Pool
@@ -68,6 +71,20 @@ func (r *PasswordRepo) Insert(ctx context.Context, pw *model.Password) error {
 	).Scan(&pw.ID)
 	if err != nil {
 		return fmt.Errorf("insert: %w", err)
+	}
+	return nil
+}
+
+func (r *PasswordRepo) Upsert(ctx context.Context, pw *model.Password) error {
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO password (password, name, website, username, user_id)
+		 VALUES ($1,$2,$3,$4,$5)
+		 ON CONFLICT (user_id, name, website) DO UPDATE SET password=EXCLUDED.password, username=EXCLUDED.username
+		 RETURNING id`,
+		pw.Password, pw.Name, pw.Website, pw.Username, pw.UserID,
+	).Scan(&pw.ID)
+	if err != nil {
+		return fmt.Errorf("upsert: %w", err)
 	}
 	return nil
 }

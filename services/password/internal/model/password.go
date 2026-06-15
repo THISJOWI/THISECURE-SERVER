@@ -10,10 +10,10 @@ type Password struct {
 }
 
 type PasswordRequest struct {
-	Password string `json:"password" binding:"required"`
-	Name     string `json:"title" binding:"required"`
-	Website  string `json:"website"`
-	Username string `json:"username"`
+	Password string `json:"password" binding:"required,max=4096"`
+	Name     string `json:"title" binding:"required,max=255"`
+	Website  string `json:"website" binding:"max=2048"`
+	Username string `json:"username" binding:"max=255"`
 }
 
 type ImportResult struct {

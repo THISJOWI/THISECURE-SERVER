@@ -47,12 +47,10 @@ func main() {
 	defer pool.Close()
 
 	jwtSecret := []byte(cfg.JWTSecret)
-	signingKey := []byte(cfg.KafkaSigningKey)
-	if len(signingKey) == 0 {
-		signingKey = jwtSecret
+	if cfg.KafkaSigningKey == "" {
+		log.Fatal("KAFKA_SIGNING_KEY must be set (separate from JWT_SECRET)")
 	}
-
-	signer := kafka.NewSigner(signingKey)
+	signer := kafka.NewSigner([]byte(cfg.KafkaSigningKey))
 	syncProd := kafka.NewProducer(cfg.KafkaBrokers, "sync-events", signer)
 	eventProd := kafka.NewProducer(cfg.KafkaBrokers, "otp-events", signer)
 
@@ -75,14 +73,23 @@ func main() {
 		}
 	}()
 
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	r.Use(mid.SecurityHeaders())
+	r.Use(mid.CORS(nil))
 	r.Use(mid.RateLimit(mid.NewRateLimiter(10, 20, time.Second)))
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 
 	v1 := r.Group("/v1/otp", mid.JWTAuth(jwtSecret))
 	otpH.Register(v1)
 
-	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
+	srv := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      r,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
 	go func() {
 		log.Printf("otp service listening on :%s", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

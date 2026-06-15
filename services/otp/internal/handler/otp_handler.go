@@ -151,7 +151,8 @@ func (h *OtpHandler) Validate(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	valid, err := h.svc.Validate(c.Request.Context(), id, userID, code)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Printf("ERROR: %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid code"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"valid": valid})

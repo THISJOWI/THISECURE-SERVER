@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"log"
 	"strconv"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,15 +22,28 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
+type failedEntry struct {
+	count     int
+	firstFail time.Time
+}
+
 type OtpService struct {
 	repo       *repository.OtpRepo
 	encKey     []byte
 	eventProd  *kafka.Producer
 	syncProd   *kafka.Producer
+	failedMu   sync.Mutex
+	failed     map[string]*failedEntry
 }
 
 func NewOtpService(repo *repository.OtpRepo, encKey []byte, eventProd, syncProd *kafka.Producer) *OtpService {
-	return &OtpService{repo: repo, encKey: encKey, eventProd: eventProd, syncProd: syncProd}
+	return &OtpService{
+		repo:      repo,
+		encKey:    encKey,
+		eventProd: eventProd,
+		syncProd:  syncProd,
+		failed:    make(map[string]*failedEntry),
+	}
 }
 
 func (s *OtpService) GetAll(ctx context.Context, userID string) ([]model.Otp, error) {
@@ -37,7 +52,9 @@ func (s *OtpService) GetAll(ctx context.Context, userID string) ([]model.Otp, er
 		return nil, err
 	}
 	for i := range otps {
-		s.decryptSecret(&otps[i])
+		if err := s.decryptSecret(&otps[i]); err != nil {
+			log.Printf("ERROR: %v (skipping entry %d)", err, otps[i].ID)
+		}
 	}
 	return otps, nil
 }
@@ -50,7 +67,9 @@ func (s *OtpService) GetByID(ctx context.Context, id int64, userID string) (*mod
 	if o == nil || o.UserID != userID {
 		return nil, nil
 	}
-	s.decryptSecret(o)
+	if err := s.decryptSecret(o); err != nil {
+		return nil, err
+	}
 	return o, nil
 }
 
@@ -82,11 +101,15 @@ func (s *OtpService) Create(ctx context.Context, req model.CreateOtpRequest, use
 		Valid:     "true",
 	}
 
-	s.encryptSecret(o)
+	if err := s.encryptSecret(o); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Insert(ctx, o); err != nil {
 		return nil, err
 	}
-	s.decryptSecret(o)
+	if err := s.decryptSecret(o); err != nil {
+		log.Printf("ERROR: decrypt after create: %v", err)
+	}
 	s.publishEvents(o, "created")
 	return o, nil
 }
@@ -100,7 +123,7 @@ func (s *OtpService) Update(ctx context.Context, id int64, req model.CreateOtpRe
 		return nil, ErrNotFound
 	}
 
-	existing.Email = ""
+	existing.Email = req.Name
 	existing.Secret = req.Secret
 	existing.Type = req.Type
 	existing.Issuer = strPtr(req.Issuer)
@@ -109,11 +132,15 @@ func (s *OtpService) Update(ctx context.Context, id int64, req model.CreateOtpRe
 	existing.Algorithm = strPtr(req.Algorithm)
 	existing.ExpiresAt = strconv.FormatInt(time.Now().UnixMilli()+int64(req.Period)*1000, 10)
 
-	s.encryptSecret(existing)
+	if err := s.encryptSecret(existing); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Update(ctx, existing); err != nil {
 		return nil, err
 	}
-	s.decryptSecret(existing)
+	if err := s.decryptSecret(existing); err != nil {
+		log.Printf("ERROR: decrypt after update: %v", err)
+	}
 	s.publishEvents(existing, "updated")
 	return existing, nil
 }
@@ -134,6 +161,20 @@ func (s *OtpService) Delete(ctx context.Context, id int64, userID string) error 
 }
 
 func (s *OtpService) Validate(ctx context.Context, id int64, userID string, code string) (bool, error) {
+	failKey := fmt.Sprintf("%s:%d", userID, id)
+	s.failedMu.Lock()
+	entry, exists := s.failed[failKey]
+	if exists && time.Since(entry.firstFail) > 5*time.Minute {
+		delete(s.failed, failKey)
+		entry = nil
+		exists = false
+	}
+	if exists && entry.count >= 5 {
+		s.failedMu.Unlock()
+		return false, fmt.Errorf("too many failed attempts")
+	}
+	s.failedMu.Unlock()
+
 	o, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return false, err
@@ -153,35 +194,50 @@ func (s *OtpService) Validate(ctx context.Context, id int64, userID string, code
 		return false, fmt.Errorf("otp expired")
 	}
 
-	s.decryptSecret(o)
+	if err := s.decryptSecret(o); err != nil {
+		return false, fmt.Errorf("invalid secret")
+	}
 	if subtle.ConstantTimeCompare([]byte(code), []byte(o.Secret)) == 0 {
+		s.failedMu.Lock()
+		e, ok := s.failed[failKey]
+		if !ok {
+			e = &failedEntry{firstFail: time.Now()}
+			s.failed[failKey] = e
+		}
+		e.count++
+		s.failedMu.Unlock()
 		return false, nil
 	}
+
+	s.failedMu.Lock()
+	delete(s.failed, failKey)
+	s.failedMu.Unlock()
 	return true, nil
 }
 
-func (s *OtpService) encryptSecret(o *model.Otp) {
+func (s *OtpService) encryptSecret(o *model.Otp) error {
 	if len(s.encKey) == 0 || o.Secret == "" {
-		return
+		return nil
 	}
 	enc, err := crypto.Encrypt([]byte(o.Secret), s.encKey)
 	if err != nil {
-		log.Printf("ERROR: encrypt OTP secret: %v", err)
-		return
+		return fmt.Errorf("encrypt OTP secret: %w", err)
 	}
 	o.Secret = enc
+	return nil
 }
 
-func (s *OtpService) decryptSecret(o *model.Otp) {
+func (s *OtpService) decryptSecret(o *model.Otp) error {
 	if len(s.encKey) == 0 || o.Secret == "" {
-		return
+		return nil
 	}
 	dec, err := crypto.Decrypt(o.Secret, s.encKey)
 	if err != nil {
-		log.Printf("ERROR: decrypt OTP secret: %v", err)
-		return
+		o.Secret = ""
+		return fmt.Errorf("decrypt OTP secret: %w", err)
 	}
 	o.Secret = string(dec)
+	return nil
 }
 
 func (s *OtpService) publishEvents(o *model.Otp, action string) {
@@ -221,7 +277,9 @@ func (s *OtpService) publishEvents(o *model.Otp, action string) {
 }
 
 func generateRandomSecret() string {
-	return strings.ReplaceAll(uuid.New().String(), "-", "")[:20]
+	b := make([]byte, 20)
+	rand.Read(b)
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b)
 }
 
 func strPtr(s string) *string {

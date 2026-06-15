@@ -4,13 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thisuite/thisecure/note/internal/model"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound = errors.New("not found")
+	ErrConflict = errors.New("version conflict")
+)
 
 type NoteRepo struct {
 	pool *pgxpool.Pool
@@ -61,7 +65,15 @@ func (r *NoteRepo) FindByTitleAndUser(ctx context.Context, title, userID string)
 	return &note, nil
 }
 
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
+
 func (r *NoteRepo) SearchByTitle(ctx context.Context, title, userID string) ([]model.Note, error) {
+	title = escapeLike(title)
 	rows, err := r.pool.Query(ctx, `SELECT id, content, title, created_at, user_id, version FROM notes WHERE title ILIKE '%' || $1 || '%' AND user_id = $2 ORDER BY created_at DESC`, title, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
@@ -70,16 +82,32 @@ func (r *NoteRepo) SearchByTitle(ctx context.Context, title, userID string) ([]m
 	return pgx.CollectRows(rows, pgx.RowToStructByName[model.Note])
 }
 
-func (r *NoteRepo) Update(ctx context.Context, note *model.Note) error {
-	tag, err := r.pool.Exec(ctx,
-		`UPDATE notes SET content = $1, title = $2, version = version + 1 WHERE id = $3 AND user_id = $4`,
-		note.Content, note.Title, note.ID, note.UserID,
-	)
+func (r *NoteRepo) Upsert(ctx context.Context, note *model.Note) error {
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO notes (content, title, created_at, user_id)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (title, user_id) DO UPDATE
+		 SET content = EXCLUDED.content, version = notes.version + 1
+		 RETURNING id, version`,
+		note.Content, note.Title, note.CreatedAt, note.UserID,
+	).Scan(&note.ID, &note.Version)
 	if err != nil {
-		return fmt.Errorf("update: %w", err)
+		return fmt.Errorf("upsert: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+	return nil
+}
+
+func (r *NoteRepo) Update(ctx context.Context, note *model.Note) error {
+	err := r.pool.QueryRow(ctx,
+		`UPDATE notes SET content = $1, title = $2, version = version + 1 WHERE id = $3 AND user_id = $4 AND version = $5
+		 RETURNING version`,
+		note.Content, note.Title, note.ID, note.UserID, note.Version,
+	).Scan(&note.Version)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return ErrConflict
+		}
+		return fmt.Errorf("update: %w", err)
 	}
 	return nil
 }

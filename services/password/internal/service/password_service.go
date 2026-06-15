@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -33,7 +34,9 @@ func (s *PasswordService) GetAll(ctx context.Context, userID string) ([]model.Pa
 		return nil, err
 	}
 	for i := range pws {
-		s.decrypt(&pws[i])
+		if err := s.decrypt(&pws[i]); err != nil {
+			log.Printf("ERROR: %v (skipping entry %d)", err, pws[i].ID)
+		}
 	}
 	return pws, nil
 }
@@ -46,16 +49,13 @@ func (s *PasswordService) GetByID(ctx context.Context, id int64, userID string) 
 	if pw == nil || pw.UserID != userID {
 		return nil, nil
 	}
-	s.decrypt(pw)
+	if err := s.decrypt(pw); err != nil {
+		return nil, err
+	}
 	return pw, nil
 }
 
 func (s *PasswordService) Create(ctx context.Context, req model.PasswordRequest, userID string) (*model.Password, error) {
-	existing, err := s.repo.FindByUserIDAndNameAndWebsite(ctx, userID, req.Name, req.Website)
-	if err != nil {
-		return nil, err
-	}
-
 	pw := &model.Password{
 		Password: req.Password,
 		Name:     req.Name,
@@ -63,19 +63,15 @@ func (s *PasswordService) Create(ctx context.Context, req model.PasswordRequest,
 		Username: req.Username,
 		UserID:   userID,
 	}
-	s.encrypt(pw)
-
-	if existing != nil {
-		pw.ID = existing.ID
-		if err := s.repo.Update(ctx, pw); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := s.repo.Insert(ctx, pw); err != nil {
-			return nil, err
-		}
+	if err := s.encrypt(pw); err != nil {
+		return nil, err
 	}
-	s.decrypt(pw)
+	if err := s.repo.Upsert(ctx, pw); err != nil {
+		return nil, err
+	}
+	if err := s.decrypt(pw); err != nil {
+		log.Printf("ERROR: decrypt after create: %v", err)
+	}
 	s.publishEvent(pw, "created")
 	return pw, nil
 }
@@ -92,11 +88,15 @@ func (s *PasswordService) Update(ctx context.Context, id int64, req model.Passwo
 	existing.Name = req.Name
 	existing.Website = req.Website
 	existing.Username = req.Username
-	s.encrypt(existing)
+	if err := s.encrypt(existing); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Update(ctx, existing); err != nil {
 		return nil, err
 	}
-	s.decrypt(existing)
+	if err := s.decrypt(existing); err != nil {
+		log.Printf("ERROR: decrypt after update: %v", err)
+	}
 	s.publishEvent(existing, "updated")
 	return existing, nil
 }
@@ -133,28 +133,29 @@ func (s *PasswordService) Import(ctx context.Context, reqs []model.PasswordReque
 	return result, nil
 }
 
-func (s *PasswordService) encrypt(pw *model.Password) {
+func (s *PasswordService) encrypt(pw *model.Password) error {
 	if len(s.encKey) == 0 || pw.Password == "" {
-		return
+		return nil
 	}
 	enc, err := crypto.Encrypt([]byte(pw.Password), s.encKey)
 	if err != nil {
-		log.Printf("ERROR: encrypt password: %v", err)
-		return
+		return fmt.Errorf("encrypt password: %w", err)
 	}
 	pw.Password = enc
+	return nil
 }
 
-func (s *PasswordService) decrypt(pw *model.Password) {
+func (s *PasswordService) decrypt(pw *model.Password) error {
 	if len(s.encKey) == 0 || pw.Password == "" {
-		return
+		return nil
 	}
 	dec, err := crypto.Decrypt(pw.Password, s.encKey)
 	if err != nil {
-		log.Printf("ERROR: decrypt password: %v", err)
-		return
+		pw.Password = ""
+		return fmt.Errorf("decrypt password: %w", err)
 	}
 	pw.Password = string(dec)
+	return nil
 }
 
 func (s *PasswordService) publishEvent(pw *model.Password, action string) {

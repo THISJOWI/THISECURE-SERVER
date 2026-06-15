@@ -3,18 +3,21 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 
 	"github.com/thisuite/thisecure/password/internal/model"
 	"github.com/thisuite/thisecure/password/internal/repository"
+	"github.com/thisuite/thisecure/pkg/crypto"
 )
 
 type DedupService struct {
-	repo *repository.PasswordRepo
+	repo   *repository.PasswordRepo
+	encKey []byte
 }
 
-func NewDedupService(repo *repository.PasswordRepo) *DedupService {
-	return &DedupService{repo: repo}
+func NewDedupService(repo *repository.PasswordRepo, encKey []byte) *DedupService {
+	return &DedupService{repo: repo, encKey: encKey}
 }
 
 func (s *DedupService) AnalyzeDuplicates(ctx context.Context, userID string) (*model.DuplicateAnalysis, error) {
@@ -67,11 +70,38 @@ func (s *DedupService) RemoveDuplicates(ctx context.Context, userID string) (int
 		sort.Slice(group.IDs, func(i, j int) bool {
 			return group.IDs[i] > group.IDs[j]
 		})
+		kept, err := s.repo.FindByID(ctx, group.IDs[0])
+		if err != nil || kept == nil {
+			continue
+		}
+		s.decrypt(kept)
+
 		for _, id := range group.IDs[1:] {
+			pw, err := s.repo.FindByID(ctx, id)
+			if err != nil || pw == nil {
+				continue
+			}
+			s.decrypt(pw)
+			if pw.Password != kept.Password {
+				log.Printf("WARN: skipping duplicate %d: password content differs from %d", id, group.IDs[0])
+				continue
+			}
 			if err := s.repo.Delete(ctx, id, userID); err == nil {
 				removed++
 			}
 		}
 	}
 	return removed, nil
+}
+
+func (s *DedupService) decrypt(pw *model.Password) {
+	if len(s.encKey) == 0 || pw.Password == "" {
+		return
+	}
+	dec, err := crypto.Decrypt(pw.Password, s.encKey)
+	if err != nil {
+		pw.Password = ""
+		return
+	}
+	pw.Password = string(dec)
 }

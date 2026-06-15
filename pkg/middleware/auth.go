@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -24,7 +25,7 @@ func JWTAuth(jwtSecret []byte) gin.HandlerFunc {
 		}
 		userID, err := jwt.ValidateToken(parts[1], jwtSecret)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token: " + err.Error()})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
 			return
 		}
 		c.Set(ContextKeyUserID, userID)
@@ -33,7 +34,15 @@ func JWTAuth(jwtSecret []byte) gin.HandlerFunc {
 }
 
 func GetUserID(c *gin.Context) string {
-	v, _ := c.Get(ContextKeyUserID)
-	s, _ := v.(string)
+	v, exists := c.Get(ContextKeyUserID)
+	if !exists {
+		log.Printf("CRITICAL: userID not found in context — middleware missing on %s %s", c.Request.Method, c.Request.URL.Path)
+		return ""
+	}
+	s, ok := v.(string)
+	if !ok || s == "" {
+		log.Printf("CRITICAL: userID is empty or wrong type on %s %s", c.Request.Method, c.Request.URL.Path)
+		return ""
+	}
 	return s
 }

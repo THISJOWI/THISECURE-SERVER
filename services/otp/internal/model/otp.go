@@ -15,11 +15,11 @@ type Otp struct {
 }
 
 type CreateOtpRequest struct {
-	Name      string `json:"name"`
-	Issuer    string `json:"issuer"`
-	Secret    string `json:"secret"`
-	Digits    int    `json:"digits"`
-	Period    int    `json:"period"`
-	Algorithm string `json:"algorithm"`
-	Type      string `json:"type" binding:"required"`
+	Name      string `json:"name" binding:"max=255"`
+	Issuer    string `json:"issuer" binding:"max=255"`
+	Secret    string `json:"secret" binding:"max=512"`
+	Digits    int    `json:"digits" binding:"min=1,max=8"`
+	Period    int    `json:"period" binding:"min=1,max=3600"`
+	Algorithm string `json:"algorithm" binding:"max=20"`
+	Type      string `json:"type" binding:"required,max=10"`
 }

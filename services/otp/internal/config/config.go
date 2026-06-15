@@ -12,6 +12,7 @@ type Config struct {
 	EncryptionKey   string
 	KafkaSigningKey string
 	KafkaBrokers    []string
+	DBSSLMode       string
 }
 
 func Load() Config {
@@ -20,13 +21,14 @@ func Load() Config {
 		JWTSecret:       getEnv("JWT_SECRET", ""),
 		EncryptionKey:   getEnv("ENCRYPTION_KEY", ""),
 		KafkaSigningKey: getEnv("KAFKA_SIGNING_KEY", ""),
+		DBSSLMode:       getEnv("DB_SSLMODE", "disable"),
 	}
 
 	dbHost := getEnv("DB_HOST", "localhost")
 	dbPort := getEnv("DB_PORT", "5432")
 	dbUser := getEnv("DB_USERNAME", "postgres")
 	dbPass := getEnv("DB_PASSWORD", "postgres")
-	cfg.DatabaseURL = fmt.Sprintf("postgres://%s:%s@%s:%s/otp?sslmode=disable", dbUser, dbPass, dbHost, dbPort)
+	cfg.DatabaseURL = fmt.Sprintf("postgres://%s:%s@%s:%s/otp?sslmode=%s", dbUser, dbPass, dbHost, dbPort, cfg.DBSSLMode)
 
 	kafkaHost := getEnv("KAFKA_HOST", "localhost")
 	kafkaPort := getEnv("KAFKA_PORT", "9092")

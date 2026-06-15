@@ -12,8 +12,8 @@ type Note struct {
 }
 
 type NoteRequest struct {
-	Title   string `json:"title" binding:"required"`
-	Content string `json:"content"`
+	Title   string `json:"title" binding:"required,max=255"`
+	Content string `json:"content" binding:"max=65536"`
 }
 
 type ImportResult struct {
