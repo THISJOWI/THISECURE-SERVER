@@ -14,6 +14,7 @@ import (
 	"github.com/thisuite/thisecure/password/internal/handler"
 	"github.com/thisuite/thisecure/password/internal/repository"
 	"github.com/thisuite/thisecure/password/internal/service"
+	"github.com/thisuite/thisecure/pkg/crypto"
 	"github.com/thisuite/thisecure/pkg/database"
 	"github.com/thisuite/thisecure/pkg/kafka"
 	mid "github.com/thisuite/thisecure/pkg/middleware"
@@ -26,8 +27,12 @@ func main() {
 	if cfg.JWTSecret == "" || len(cfg.JWTSecret) < 32 {
 		log.Fatal("JWT_SECRET must be set and at least 32 characters")
 	}
-	if cfg.EncryptionKey == "" || len(cfg.EncryptionKey) != 64 {
-		log.Fatal("ENCRYPTION_KEY must be set and exactly 32 bytes (64 hex characters)")
+	if cfg.EncryptionKey == "" {
+		log.Fatal("ENCRYPTION_KEY must be set")
+	}
+	encKey := []byte(cfg.EncryptionKey)
+	if err := crypto.ValidateKey(encKey); err != nil {
+		log.Fatalf("ENCRYPTION_KEY: %v", err)
 	}
 
 	pool, err := database.NewPool(ctx, database.DefaultConfig(cfg.DatabaseURL))
@@ -36,7 +41,6 @@ func main() {
 	}
 	defer pool.Close()
 
-	encKey := []byte(cfg.EncryptionKey)
 	jwtSecret := []byte(cfg.JWTSecret)
 	signingKey := []byte(cfg.KafkaSigningKey)
 	if len(signingKey) == 0 {
