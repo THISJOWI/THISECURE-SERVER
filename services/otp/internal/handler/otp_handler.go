@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,6 +36,7 @@ func (h *OtpHandler) error(c *gin.Context, status int, err error) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
+	log.Printf("ERROR: %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
 	c.JSON(status, gin.H{"error": "internal server error"})
 }
 
