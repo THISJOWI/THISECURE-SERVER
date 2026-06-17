@@ -21,7 +21,6 @@ credentials/
 **/target/
 **/build/
 **/server
-!services/passkey/cmd/server/
 
 # IDE
 .idea/
