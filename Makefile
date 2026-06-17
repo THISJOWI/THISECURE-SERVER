@@ -1,6 +1,6 @@
 .PHONY: build test test-integration test-all vet clean dev
 
-SERVICES := note otp password
+SERVICES := note otp passkey password
 
 build:
 	@for svc in $(SERVICES); do \

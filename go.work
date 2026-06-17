@@ -4,5 +4,6 @@ use (
 	./pkg
 	./services/note
 	./services/otp
+	./services/passkey
 	./services/password
 )
