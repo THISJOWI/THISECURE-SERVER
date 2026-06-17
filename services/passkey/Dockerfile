@@ -1,8 +1,7 @@
 FROM golang:1.25-alpine AS builder
-WORKDIR /app
-COPY pkg/ pkg/
-COPY services/passkey/ services/passkey/
-WORKDIR /app/services/passkey
+COPY pkg/ /pkg/
+COPY services/passkey/ /passkey/
+WORKDIR /passkey
 RUN go mod tidy && go build -o /server ./cmd/server/
 
 FROM alpine:3.19
