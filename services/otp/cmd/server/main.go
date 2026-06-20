@@ -22,6 +22,8 @@ import (
 	"github.com/thisuite/thisecure/pkg/models"
 )
 
+const serviceVersion = "1.0.0"
+
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()

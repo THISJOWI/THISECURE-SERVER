@@ -256,7 +256,7 @@ jobs:
           context: .
           file: services/${{ matrix.service }}/Dockerfile
           push: true
-          platforms: ${{ needs.changes.outputs.branch == 'develop' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          platforms: ${{ needs.changes.outputs.branch == 'self' && 'linux/arm64' || (needs.changes.outputs.branch == 'develop' && 'linux/amd64' || 'linux/amd64,linux/arm64') }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.revision=${{ needs.changes.outputs.sha }}
