@@ -190,7 +190,8 @@ jobs:
 
           if [ "${{ github.event_name }}" != "workflow_dispatch" ] && \
              [ "${{ github.ref_name }}" != "master" ] && \
-             [ "${{ github.ref_name }}" != "develop" ]; then
+             [ "${{ github.ref_name }}" != "develop" ] && \
+             [ "${{ github.ref_name }}" != "self" ]; then
             SHOULD_BUILD="false"
           fi
 
@@ -242,7 +243,9 @@ jobs:
         run: |
           BRANCH="${{ needs.changes.outputs.branch }}"
           SHA="${{ needs.changes.outputs.sha }}"
-          if [ "$BRANCH" = "develop" ]; then
+          if [ "$BRANCH" = "self" ]; then
+            echo "tags=thsjowi/${{ matrix.service }}:self,thsjowi/${{ matrix.service }}:self-${SHA:0:7}" >> $GITHUB_OUTPUT
+          elif [ "$BRANCH" = "develop" ]; then
             echo "tags=thsjowi/${{ matrix.service }}:dev,thsjowi/${{ matrix.service }}:dev-${SHA:0:7}" >> $GITHUB_OUTPUT
           else
             echo "tags=thsjowi/${{ matrix.service }}:${SHA:0:7},thsjowi/${{ matrix.service }}:latest" >> $GITHUB_OUTPUT
