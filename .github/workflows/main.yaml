@@ -32,14 +32,14 @@ jobs:
       - id: build-matrix
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo 'matrix=["note","password","otp"]' >> $GITHUB_OUTPUT
+            echo 'matrix=["note","password","otp","messaging"]' >> $GITHUB_OUTPUT
           else
             if [ "${{ github.event_name }}" = "pull_request" ]; then
               BASE="${{ github.event.pull_request.base.sha }}"
             else
               BASE="${{ github.event.before }}"
             fi
-            CHANGED=$(git diff --name-only "${BASE}" HEAD | cut -d/ -f2 | sort -u | grep -E '^(note|password|otp)$' | jq -R -s -c 'split("\n")[:-1]')
+            CHANGED=$(git diff --name-only "${BASE}" HEAD | cut -d/ -f2 | sort -u | grep -E '^(note|password|otp|messaging)$' | jq -R -s -c 'split("\n")[:-1]')
             echo "matrix=${CHANGED:-[]}" >> $GITHUB_OUTPUT
           fi
 
@@ -199,16 +199,23 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: go
+          languages: ${{ matrix.service == 'messaging' && 'javascript-typescript' || 'go' }}
           queries: security-and-quality
 
       - name: Set up Go
+        if: matrix.service != 'messaging'
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
 
+      - name: Set up Node.js
+        if: matrix.service == 'messaging'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Build ${{ matrix.service }}
-        run: go build ./...
+        run: ${{ matrix.service == 'messaging' && 'npm ci && npm run build' || 'go build ./...' }}
         working-directory: services/${{ matrix.service }}
 
       - name: CodeQL Analyze
