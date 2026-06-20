@@ -5,6 +5,8 @@ import (
 	"os"
 )
 
+const ServiceVersion = "1.0.0"
+
 type Config struct {
 	Port            string
 	DatabaseURL     string

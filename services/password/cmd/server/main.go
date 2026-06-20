@@ -21,8 +21,6 @@ import (
 	mid "github.com/thisuite/thisecure/pkg/middleware"
 )
 
-const serviceVersion = "1.0.0"
-
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()
