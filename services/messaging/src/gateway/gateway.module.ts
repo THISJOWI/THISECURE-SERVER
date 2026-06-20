@@ -5,6 +5,6 @@ import { WsGuard } from './gateway.guard';
 
 @Module({
   providers: [MessagingGateway, GatewayService, WsGuard],
-  exports: [GatewayService, WsGuard],
+  exports: [MessagingGateway, GatewayService, WsGuard],
 })
 export class GatewayModule {}

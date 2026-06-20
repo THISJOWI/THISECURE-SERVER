@@ -34,7 +34,7 @@ services:
   postgres-password:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: password
+      POSTGRES_DB: passwords
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
