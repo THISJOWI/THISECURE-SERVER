@@ -54,3 +54,7 @@ Thumbs.db
 *.tmp
 *.swp
 *~
+
+# NestJS / Node
+**/node_modules/
+**/dist/
