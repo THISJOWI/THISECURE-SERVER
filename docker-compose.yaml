@@ -148,8 +148,8 @@ services:
 
   messaging:
     build:
-      context: services/messaging
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/messaging/Dockerfile
     ports:
       - "3001:3001"
     environment:
