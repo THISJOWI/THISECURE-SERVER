@@ -36,8 +36,11 @@ jobs:
           else
             if [ "${{ github.event_name }}" = "pull_request" ]; then
               BASE="${{ github.event.pull_request.base.sha }}"
-            else
+            elif git rev-parse --verify "${{ github.event.before }}" 2>/dev/null; then
               BASE="${{ github.event.before }}"
+            else
+              git fetch origin master 2>/dev/null || true
+              BASE="$(git merge-base origin/master HEAD 2>/dev/null || git rev-list --max-parents=0 HEAD)"
             fi
             CHANGED=$(git diff --name-only "${BASE}" HEAD | cut -d/ -f2 | sort -u | grep -E '^(note|password|otp|messaging)$' | jq -R -s -c 'split("\n")[:-1]')
             echo "matrix=${CHANGED:-[]}" >> $GITHUB_OUTPUT
