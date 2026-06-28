@@ -53,6 +53,26 @@ export class ChatController {
     );
   }
 
+  @Get('between/:recipientId')
+  async getConversationBetween(@Req() req: any, @Param('recipientId') recipientId: string) {
+    const userId = this.extractUserId(req);
+    const conversation = await this.chatService.createConversation(
+      userId,
+      'direct',
+      [recipientId],
+      undefined,
+      this.gateway.server,
+    );
+    const messages = await this.chatService.getMessages(
+      (conversation as any)._id.toString(),
+      userId,
+    );
+    return {
+      conversationId: (conversation as any)._id.toString(),
+      messages,
+    };
+  }
+
   @Get(':id')
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -64,5 +84,22 @@ export class ChatController {
   ) {
     const userId = this.extractUserId(req);
     return this.chatService.getMessages(conversationId, userId, +page, +limit);
+  }
+
+  @Post(':id/messages')
+  async sendMessage(
+    @Req() req: any,
+    @Param('id') conversationId: string,
+    @Body() body: { text: string },
+  ) {
+    const userId = this.extractUserId(req);
+    const message = await this.chatService.sendMessage(
+      userId,
+      conversationId,
+      body.text,
+      undefined,
+      this.gateway.server,
+    );
+    return { success: true, data: message };
   }
 }
