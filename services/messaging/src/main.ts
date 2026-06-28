@@ -4,7 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 
-const serviceVersion = '1.0.1';
+const serviceVersion = process.env.SERVICE_VERSION || '1.0.0';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
