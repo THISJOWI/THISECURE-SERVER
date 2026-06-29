@@ -30,7 +30,8 @@ export class ChatService {
     if (type === 'direct') {
       const existing = await this.conversationModel.findOne({
         type: 'direct',
-        'participants.userId': { $all: allParticipants, $size: allParticipants.length },
+        'participants.userId': { $all: allParticipants },
+        'participants': { $size: allParticipants.length },
       });
       if (existing) return existing;
     }
