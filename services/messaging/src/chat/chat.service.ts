@@ -27,13 +27,6 @@ export class ChatService {
   ): Promise<Conversation> {
     const allParticipants = [...new Set([userId, ...participantIds])];
 
-    const isLdapUser = await Promise.all(
-      allParticipants.map(pid => this.ldapService.isLdapUser(pid)),
-    );
-    if (isLdapUser.some(v => !v)) {
-      throw new ForbiddenException('All participants must be LDAP users');
-    }
-
     if (type === 'direct') {
       const existing = await this.conversationModel.findOne({
         type: 'direct',
@@ -108,10 +101,6 @@ export class ChatService {
     if (!conversation) throw new NotFoundException('Conversation not found');
     if (!conversation.participants.some(p => p.userId === userId)) {
       throw new ForbiddenException('Not a participant');
-    }
-
-    if (!(await this.ldapService.isLdapUser(userId))) {
-      throw new ForbiddenException('Only LDAP users can send messages');
     }
 
     const message = new this.messageModel({
