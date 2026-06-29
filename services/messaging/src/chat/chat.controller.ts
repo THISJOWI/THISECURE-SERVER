@@ -38,19 +38,21 @@ export class ChatController {
   @Get()
   async getConversations(@Req() req: any) {
     const userId = this.extractUserId(req);
-    return this.chatService.getUserConversations(userId);
+    const data = await this.chatService.getUserConversations(userId);
+    return { success: true, data };
   }
 
   @Post()
   async createConversation(@Req() req: any, @Body() dto: CreateConversationDto) {
     const userId = this.extractUserId(req);
-    return this.chatService.createConversation(
+    const data = await this.chatService.createConversation(
       userId,
       dto.type,
       dto.participantIds,
       dto.name,
       this.gateway.server,
     );
+    return { success: true, data };
   }
 
   @Get('between/:recipientId')
@@ -63,13 +65,15 @@ export class ChatController {
       undefined,
       this.gateway.server,
     );
+    const conversationId = (conversation as any)._id.toString();
     const messages = await this.chatService.getMessages(
-      (conversation as any)._id.toString(),
+      conversationId,
       userId,
     );
     return {
-      conversationId: (conversation as any)._id.toString(),
-      messages,
+      success: true,
+      conversationId,
+      data: messages,
     };
   }
 
@@ -83,7 +87,8 @@ export class ChatController {
     @Query('limit') limit = 50,
   ) {
     const userId = this.extractUserId(req);
-    return this.chatService.getMessages(conversationId, userId, +page, +limit);
+    const data = await this.chatService.getMessages(conversationId, userId, +page, +limit);
+    return { success: true, data };
   }
 
   @Post(':id/messages')
