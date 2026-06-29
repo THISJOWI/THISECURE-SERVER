@@ -50,13 +50,16 @@ export class ChatGateway {
     if (!userId) return;
 
     try {
-      await this.chatService.markRead(userId, payload.conversationId);
+      const senderIds = await this.chatService.markRead(userId, payload.conversationId);
 
-      for (const sid of this.gatewayService.getUserSockets(userId)) {
-        this.server.to(sid).emit('readUpdated', {
-          conversationId: payload.conversationId,
-          userId,
-        });
+      // Notify affected senders that their messages were read
+      for (const senderId of senderIds) {
+        for (const sid of this.gatewayService.getUserSockets(senderId)) {
+          this.server.to(sid).emit('readUpdated', {
+            conversationId: payload.conversationId,
+            userId,
+          });
+        }
       }
     } catch (error) {
       this.logger.error(`markRead failed: ${error.message}`);

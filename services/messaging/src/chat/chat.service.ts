@@ -83,12 +83,14 @@ export class ChatService {
       throw new ForbiddenException('Not a participant');
     }
 
-    return this.messageModel
+    const messages = await this.messageModel
       .find({ conversationId: new Types.ObjectId(conversationId) })
       .sort({ sentAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .lean();
+
+    return messages.map(msg => this.toMessageResponse(msg));
   }
 
   async sendMessage(
@@ -125,12 +127,32 @@ export class ChatService {
       });
     }
 
-    return message;
+    return this.toMessageResponse(message.toObject());
   }
 
-  async markRead(userId: string, conversationId: string): Promise<void> {
+  private toMessageResponse(msg: any): any {
+    const senderId = msg.senderId?.toString();
+    return {
+      ...msg,
+      id: (msg._id || msg.id)?.toString(),
+      isRead: Array.isArray(msg.readBy) && msg.readBy.some((rb: any) => rb.userId?.toString() !== senderId),
+    };
+  }
+
+  async markRead(userId: string, conversationId: string): Promise<string[]> {
     const conversation = await this.conversationModel.findById(conversationId);
     if (!conversation) throw new NotFoundException('Conversation not found');
+
+    const affected = await this.messageModel.find(
+      {
+        conversationId: new Types.ObjectId(conversationId),
+        senderId: { $ne: userId },
+        'readBy.userId': { $ne: userId },
+      },
+      { senderId: 1, _id: 0 },
+    ).lean();
+
+    const senderIds = [...new Set(affected.map(m => m.senderId))];
 
     await this.messageModel.updateMany(
       {
@@ -142,5 +164,7 @@ export class ChatService {
         $push: { readBy: { userId, readAt: new Date() } },
       },
     );
+
+    return senderIds;
   }
 }

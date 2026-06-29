@@ -4,6 +4,7 @@ import { KafkaModule } from './kafka/kafka.module';
 import { LdapModule } from './ldap/ldap.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { ChatModule } from './chat/chat.module';
+import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { ChatModule } from './chat/chat.module';
     LdapModule,
     GatewayModule,
     ChatModule,
+    MetricsModule,
   ],
 })
 export class AppModule {}
