@@ -17,7 +17,9 @@ import (
 	"github.com/thisuite/thisecure/password/internal/service"
 	"github.com/thisuite/thisecure/pkg/crypto"
 	"github.com/thisuite/thisecure/pkg/database"
+	"github.com/thisuite/thisecure/pkg/discovery"
 	"github.com/thisuite/thisecure/pkg/kafka"
+	"github.com/thisuite/thisecure/pkg/metrics"
 	mid "github.com/thisuite/thisecure/pkg/middleware"
 )
 
@@ -63,7 +65,18 @@ func main() {
 	r.Use(mid.SecurityHeaders())
 	r.Use(mid.CORS(nil))
 	r.Use(mid.RateLimit(mid.NewRateLimiter(10, 20, time.Second)))
-	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
+	r.Use(metrics.Middleware())
+	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok", "service": "password"}) })
+	r.GET("/ready", func(c *gin.Context) {
+		if err := pool.Ping(c.Request.Context()); err != nil {
+			c.JSON(503, gin.H{"status": "not ready", "error": "database unavailable"})
+			return
+		}
+		c.JSON(200, gin.H{"status": "ready", "service": "password"})
+	})
+	r.GET("/metrics", metrics.PrometheusHandler())
+	r.GET("/metrics/json", metrics.JSONHandler())
+	r.GET("/discovery", discovery.Handler(r, "password"))
 
 	v1 := r.Group("/v1/passwords", mid.JWTAuth(jwtSecret))
 	pwH.Register(v1)

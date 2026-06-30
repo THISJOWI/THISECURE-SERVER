@@ -3,27 +3,20 @@
 ## Architecture
 
 - **3 independent Go services** in `services/`: `note`, `otp`, `password` (Go 1.25)
+- **1 NestJS service** in `services/`: `messaging` (real-time chat for LDAP users)
 - **Shared library** in `pkg/` (`crypto`, `database`, `jwt`, `kafka`, `middleware`, `models`)
-- **Go workspace** (`go.work`) ties root `pkg/` with all services
-- Each service has its own `go.mod`, `cmd/server/`, `internal/`, `Dockerfile`, `migrations/`
-- **No messages service** — removed
+- **Go workspace** (`go.work`) ties root `pkg/` with all Go services
+- Each Go service has its own `go.mod`, `cmd/server/`, `internal/`, `Dockerfile`, `migrations/`
+- NestJS service uses `npm` for dependencies, `nest build` for compilation
 
 ## Commands
 
-All commands run from repo root (use Go workspace):
+All commands run from repo root:
 
 ```
-go build ./...              # build all
-go test ./...               # test all
-go vet ./...                # vet all
-```
-
-Or use `Makefile`:
-
-```
-make build                  # build all services
-make test                   # test all
-make vet                    # vet all
+make build                  # build all services (Go + NestJS)
+make test                   # test all Go services
+make vet                    # vet all Go services
 make dev                    # show dev run commands
 ```
 
@@ -33,6 +26,16 @@ Per service:
 go run ./services/note/cmd/server/
 go run ./services/otp/cmd/server/
 go run ./services/password/cmd/server/
+cd services/messaging && npm run start:dev
+```
+
+NestJS messaging service:
+
+```
+cd services/messaging && npm install   # install deps
+cd services/messaging && npm run build # compile
+cd services/messaging && npm run start:dev  # dev mode with watch
+cd services/messaging && npm test      # run tests
 ```
 
 ## CI/CD

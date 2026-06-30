@@ -12,6 +12,10 @@ import (
 	"github.com/thisuite/thisecure/pkg/middleware"
 )
 
+func sanitizeLog(s string) string {
+	return strings.NewReplacer("\n", "", "\r", "").Replace(s)
+}
+
 type OtpHandler struct {
 	svc  *service.OtpService
 	qr   *service.QrService
@@ -36,7 +40,7 @@ func (h *OtpHandler) error(c *gin.Context, status int, err error) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
-	log.Printf("ERROR: %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
+	log.Printf("ERROR: %s %s: %v", c.Request.Method, sanitizeLog(c.Request.URL.Path), err)
 	c.JSON(status, gin.H{"error": "internal server error"})
 }
 
@@ -151,7 +155,7 @@ func (h *OtpHandler) Validate(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	valid, err := h.svc.Validate(c.Request.Context(), id, userID, code)
 	if err != nil {
-		log.Printf("ERROR: %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
+		log.Printf("ERROR: %s %s: %v", c.Request.Method, sanitizeLog(c.Request.URL.Path), err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid code"})
 		return
 	}

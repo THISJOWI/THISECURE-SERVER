@@ -32,14 +32,17 @@ jobs:
       - id: build-matrix
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo 'matrix=["note","password","otp"]' >> $GITHUB_OUTPUT
+            echo 'matrix=["note","password","otp","messaging"]' >> $GITHUB_OUTPUT
           else
             if [ "${{ github.event_name }}" = "pull_request" ]; then
               BASE="${{ github.event.pull_request.base.sha }}"
-            else
+            elif git rev-parse --verify "${{ github.event.before }}" 2>/dev/null; then
               BASE="${{ github.event.before }}"
+            else
+              git fetch origin master 2>/dev/null || true
+              BASE="$(git merge-base origin/master HEAD 2>/dev/null || git rev-list --max-parents=0 HEAD)"
             fi
-            CHANGED=$(git diff --name-only "${BASE}" HEAD | cut -d/ -f2 | sort -u | grep -E '^(note|password|otp)$' | jq -R -s -c 'split("\n")[:-1]')
+            CHANGED=$(git diff --name-only "${BASE}" HEAD | cut -d/ -f2 | sort -u | grep -E '^(note|password|otp|messaging)$' | jq -R -s -c 'split("\n")[:-1]')
             echo "matrix=${CHANGED:-[]}" >> $GITHUB_OUTPUT
           fi
 
@@ -190,7 +193,8 @@ jobs:
 
           if [ "${{ github.event_name }}" != "workflow_dispatch" ] && \
              [ "${{ github.ref_name }}" != "master" ] && \
-             [ "${{ github.ref_name }}" != "develop" ]; then
+             [ "${{ github.ref_name }}" != "develop" ] && \
+             [ "${{ github.ref_name }}" != "self" ]; then
             SHOULD_BUILD="false"
           fi
 
@@ -199,16 +203,23 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: go
+          languages: ${{ matrix.service == 'messaging' && 'javascript-typescript' || 'go' }}
           queries: security-and-quality
 
       - name: Set up Go
+        if: matrix.service != 'messaging'
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
 
+      - name: Set up Node.js
+        if: matrix.service == 'messaging'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Build ${{ matrix.service }}
-        run: go build ./...
+        run: ${{ matrix.service == 'messaging' && 'npm ci && npm run build' || 'go build ./...' }}
         working-directory: services/${{ matrix.service }}
 
       - name: CodeQL Analyze
@@ -235,7 +246,9 @@ jobs:
         run: |
           BRANCH="${{ needs.changes.outputs.branch }}"
           SHA="${{ needs.changes.outputs.sha }}"
-          if [ "$BRANCH" = "develop" ]; then
+          if [ "$BRANCH" = "self" ]; then
+            echo "tags=thsjowi/${{ matrix.service }}:self,thsjowi/${{ matrix.service }}:self-${SHA:0:7}" >> $GITHUB_OUTPUT
+          elif [ "$BRANCH" = "develop" ]; then
             echo "tags=thsjowi/${{ matrix.service }}:dev,thsjowi/${{ matrix.service }}:dev-${SHA:0:7}" >> $GITHUB_OUTPUT
           else
             echo "tags=thsjowi/${{ matrix.service }}:${SHA:0:7},thsjowi/${{ matrix.service }}:latest" >> $GITHUB_OUTPUT
@@ -249,7 +262,7 @@ jobs:
           context: .
           file: services/${{ matrix.service }}/Dockerfile
           push: true
-          platforms: ${{ needs.changes.outputs.branch == 'develop' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          platforms: ${{ needs.changes.outputs.branch == 'self' && 'linux/arm64' || (needs.changes.outputs.branch == 'develop' && 'linux/amd64' || 'linux/amd64,linux/arm64') }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.revision=${{ needs.changes.outputs.sha }}
