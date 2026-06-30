@@ -9,6 +9,10 @@ import (
 	"github.com/thisuite/thisecure/pkg/jwt"
 )
 
+func sanitizeLog(s string) string {
+	return strings.NewReplacer("\n", "", "\r", "").Replace(s)
+}
+
 const ContextKeyUserID = "userId"
 
 func JWTAuth(jwtSecret []byte) gin.HandlerFunc {
@@ -36,12 +40,12 @@ func JWTAuth(jwtSecret []byte) gin.HandlerFunc {
 func GetUserID(c *gin.Context) string {
 	v, exists := c.Get(ContextKeyUserID)
 	if !exists {
-		log.Printf("CRITICAL: userID not found in context — middleware missing on %s %s", c.Request.Method, c.Request.URL.Path)
+		log.Printf("CRITICAL: userID not found in context — middleware missing on %s %s", c.Request.Method, sanitizeLog(c.Request.URL.Path))
 		return ""
 	}
 	s, ok := v.(string)
 	if !ok || s == "" {
-		log.Printf("CRITICAL: userID is empty or wrong type on %s %s", c.Request.Method, c.Request.URL.Path)
+		log.Printf("CRITICAL: userID is empty or wrong type on %s %s", c.Request.Method, sanitizeLog(c.Request.URL.Path))
 		return ""
 	}
 	return s

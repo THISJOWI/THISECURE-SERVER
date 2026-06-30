@@ -18,6 +18,9 @@ export class LdapUser extends Document {
   @Prop({ required: true, index: true })
   orgId: string;
 
+  @Prop()
+  jpegPhoto?: string;
+
   @Prop({ default: Date.now })
   lastSyncedAt: Date;
 }

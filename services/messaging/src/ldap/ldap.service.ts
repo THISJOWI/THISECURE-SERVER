@@ -43,8 +43,50 @@ export class LdapService {
     this.logger.log(`Removed LDAP user ${userId}`);
   }
 
-  async getDomainUsers(domain: string) {
-    return this.ldapUserModel.find({ domain }).lean();
+  async getDomainUsers(domain: string, baseUrl?: string) {
+    const users = await this.ldapUserModel.find({ domain }).lean();
+
+    if (baseUrl) {
+      const apiPrefix = process.env.API_PREFIX || '';
+      return users.map((u: any) => ({
+        ...u,
+        _id: u._id?.toString(),
+        avatarUrl: u.jpegPhoto
+          ? `${baseUrl}${apiPrefix}/ldap-users/${domain}/${u.userId}/photo`
+          : undefined,
+      }));
+    }
+
+    return users.map((u: any) => ({
+      ...u,
+      _id: u._id?.toString(),
+    }));
+  }
+
+  async updatePhoto(
+    userId: string,
+    domain: string,
+    photoBase64: string,
+  ): Promise<void> {
+    await this.ldapUserModel.findOneAndUpdate(
+      { userId, domain },
+      { $set: { jpegPhoto: photoBase64, lastSyncedAt: new Date() } },
+    );
+  }
+
+  async getPhoto(userId: string, domain: string): Promise<string | null> {
+    const user = await this.ldapUserModel.findOne(
+      { userId, domain },
+      { jpegPhoto: 1 },
+    ).lean();
+    return user?.jpegPhoto ?? null;
+  }
+
+  async deletePhoto(userId: string, domain: string): Promise<void> {
+    await this.ldapUserModel.findOneAndUpdate(
+      { userId, domain },
+      { $set: { jpegPhoto: undefined, lastSyncedAt: new Date() } },
+    );
   }
 
   async isLdapUser(userId: string): Promise<boolean> {
