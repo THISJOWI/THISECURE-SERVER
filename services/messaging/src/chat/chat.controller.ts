@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Param,
   Query,
   Body,
@@ -89,6 +90,13 @@ export class ChatController {
     const userId = this.extractUserId(req);
     const data = await this.chatService.getMessages(conversationId, userId, +page, +limit);
     return { success: true, data };
+  }
+
+  @Put(':id/read')
+  async markRead(@Req() req: any, @Param('id') conversationId: string) {
+    const userId = this.extractUserId(req);
+    await this.chatService.markRead(userId, conversationId);
+    return { success: true };
   }
 
   @Post(':id/messages')
