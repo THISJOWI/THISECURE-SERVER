@@ -21,7 +21,7 @@ export class ChatGateway {
   ) {}
 
   @SubscribeMessage('sendMessage')
-  async handleSendMessage(socket: Socket, payload: { conversationId: string; text: string; replyTo?: string }) {
+  async handleSendMessage(socket: Socket, payload: { conversationId: string; text: string; replyTo?: string; ephemeralPublicKey?: string }) {
     const userId = this.gatewayService.getUserId(socket.id);
     if (!userId) {
       socket.emit('error', { message: 'Not authenticated' });
@@ -34,10 +34,11 @@ export class ChatGateway {
         payload.conversationId,
         payload.text,
         payload.replyTo,
+        payload.ephemeralPublicKey,
         this.server,
       );
 
-      socket.emit('messageSent', { id: (message as any)._id || message.id });
+      socket.emit('messageSent', message);
     } catch (error) {
       this.logger.error(`sendMessage failed: ${error.message}`);
       socket.emit('error', { message: error.message });

@@ -103,7 +103,7 @@ export class ChatController {
   async sendMessage(
     @Req() req: any,
     @Param('id') conversationId: string,
-    @Body() body: { text: string },
+    @Body() body: { text: string; ephemeralPublicKey?: string },
   ) {
     const userId = this.extractUserId(req);
     const message = await this.chatService.sendMessage(
@@ -111,6 +111,7 @@ export class ChatController {
       conversationId,
       body.text,
       undefined,
+      body.ephemeralPublicKey,
       this.gateway.server,
     );
     return { success: true, data: message };

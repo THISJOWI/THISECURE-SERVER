@@ -98,6 +98,7 @@ export class ChatService {
     conversationId: string,
     text: string,
     replyTo?: string,
+    ephemeralPublicKey?: string,
     server?: Server,
   ): Promise<Message> {
     const conversation = await this.conversationModel.findById(conversationId);
@@ -111,6 +112,7 @@ export class ChatService {
       senderId: userId,
       text,
       replyTo: replyTo ? new Types.ObjectId(replyTo) : undefined,
+      ephemeralPublicKey,
       sentAt: new Date(),
       readBy: [{ userId, readAt: new Date() }],
     });
@@ -120,14 +122,15 @@ export class ChatService {
     conversation.updatedAt = new Date();
     await conversation.save();
 
+    const responseMsg = this.toMessageResponse(message.toObject());
     for (const participant of conversation.participants) {
       if (participant.userId === userId) continue;
       this.gatewayService.getUserSockets(participant.userId).forEach(socketId => {
-        server?.to(socketId).emit('newMessage', message.toObject());
+        server?.to(socketId).emit('newMessage', responseMsg);
       });
     }
 
-    return this.toMessageResponse(message.toObject());
+    return responseMsg;
   }
 
   private toMessageResponse(msg: any): any {
@@ -136,6 +139,7 @@ export class ChatService {
       ...msg,
       id: (msg._id || msg.id)?.toString(),
       isRead: Array.isArray(msg.readBy) && msg.readBy.some((rb: any) => rb.userId?.toString() !== senderId),
+      isEncrypted: !!msg.ephemeralPublicKey,
     };
   }
 

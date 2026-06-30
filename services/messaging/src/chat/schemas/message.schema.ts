@@ -26,6 +26,9 @@ export class Message extends Document {
 
   @Prop()
   replyTo?: Types.ObjectId;
+
+  @Prop()
+  ephemeralPublicKey?: string;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
